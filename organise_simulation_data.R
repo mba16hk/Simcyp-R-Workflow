@@ -1,45 +1,77 @@
 
 OrganiseInputData <- function (httk_exp_data, Vss_method = 3, Input_Dose = 100, UNITS = 'mg/kg', info){
   
-  #extract additional info and compound code
-  indicies <- which(colnames(info) %in% c('Code','DOSE','DOSEUNITS','VSSMETHOD'))
-  additional_headers <- colnames(info)[indicies]
-  additional_data <- as.data.frame(info[,indicies])
-  colnames(additional_data)<-additional_headers
-  
-  
-  #add the doses from the input page
-  httk_exp_data<-merge(httk_exp_data, additional_data, by = 'Code', all.x = T)
+  # -------------- Moleclar Weight -----------------------#
   
   #ensure MW and MWfreebase are equal when one of them is NA
   httk_exp_data$MWfreebase <- ifelse(is.na(httk_exp_data$MWfreebase),
                                      httk_exp_data$MW,
                                      httk_exp_data$MWfreebase)
   
-  #Compounds with logP==logD are set to neutral if they have no compound type label
+  # -------------- Compound characterisation and pKa values -----------------------#
+  
+  #Compounds with logP==logD are set to NEUTRAL only if they have no 'compound type' label
   httk_exp_data$Compound.type <- ifelse(is.na(httk_exp_data$Compound.type) & 
                                         (httk_exp_data$logPow == httk_exp_data$logD),
                                         'NEUTRAL',
                                         httk_exp_data$Compound.type)
   
-  #assume compound is neutral if compound type is NA
-  httk_exp_data$Compound.type <- ifelse(is.na(httk_exp_data$Compound.type),
-                                     'NEUTRAL',
-                                     httk_exp_data$Compound.type)
+  #If acidic pKa and Basic pKa are both NA ... set the compound to NEUTRAL
+  httk_exp_data$Compound.type <- ifelse(is.na(httk_exp_data$Compound.type) & 
+                                          is.na(httk_exp_data$Acidic..pKa) & is.na(httk_exp_data$Basic.pKa),
+                                        'NEUTRAL',
+                                        httk_exp_data$Compound.type)
   
-  #set logP==logD for NEUTRAL compounds
-  httk_exp_data$logD <- ifelse(httk_exp_data$Compound.type == 'NEUTRAL',
-                                        httk_exp_data$logPow,
-                                        httk_exp_data$logD)
+  #if any NA compound types, set them to NEUTRAL
+  httk_exp_data$Compound.type <- ifelse(is.na(httk_exp_data$Compound.type),'NEUTRAL',httk_exp_data$Compound.type)
   
-  #take acidic pKa always unless NA, take basic pKa
-  httk_exp_data$Acidic..pKa<-ifelse(is.na(httk_exp_data$Acidic..pKa)
-                                    & httk_exp_data$Compound.type != 'ZWITTERION',
-                                    httk_exp_data$Basic.pKa,
-                                    httk_exp_data$Acidic..pKa)
-                                           
+  # If the compound is from EPI Suite and it has a pKa (in acidic pKa which we merged there),
+  # then if pKa <7 compound is acidic, if >7 compound is basic
+  httk_exp_data$Compound.type <- ifelse(is.na(httk_exp_data$Compound.type) & 
+                                          httk_exp_data$data_source == 'EPI SUITE (EPA) - Experimental Data' & 
+                                          !is.na(httk_exp_data$Acidic..pKa) & httk_exp_data$Acidic..pKa <7,
+                                        'ACID', httk_exp_data$Compound.type)
+  
+  httk_exp_data$Compound.type <- ifelse(is.na(httk_exp_data$Compound.type) & 
+                                          httk_exp_data$data_source == 'EPI SUITE (EPA) - Experimental Data' & 
+                                          !is.na(httk_exp_data$Acidic..pKa) & httk_exp_data$Acidic..pKa >7,
+                                        'BASE', httk_exp_data$Compound.type)
+  
+  #if acidic pKa or basic pKa are negative, set them to 0
+  httk_exp_data$Acidic..pKa <- ifelse(httk_exp_data$Acidic..pKa<0,
+                                      0, httk_exp_data$Acidic..pKa)
+  
+  httk_exp_data$Basic.pKa <- ifelse(httk_exp_data$Basic.pKa<0,
+                                      0, httk_exp_data$Basic.pKa)
+  
+  #for Simcyp, only 1 pKa value is used for acids/bases, and no pKa for NEUTRALS
+  
+  #remove all pKas for NEUTRALS
+  httk_exp_data$Acidic..pKa <- ifelse(httk_exp_data$Compound.type == 'NEUTRAL',
+                                      NA, httk_exp_data$Acidic..pKa)
+  httk_exp_data$Basic.pKa <- ifelse(httk_exp_data$Compound.type == 'NEUTRAL',
+                                      NA, httk_exp_data$Basic.pKa)
+  
+  #choose highest pKa for bases and lowest pKa for acids
+  pKas<-data.frame(as.numeric(httk_exp_data$Acidic..pKa),
+                   as.numeric(httk_exp_data$Basic.pKa))
+  
+  for (i in 1:nrow(httk_exp_data)){
+    if(httk_exp_data$Compound.type[i]=='BASE'){
+      
+      httk_exp_data$Acidic..pKa[i]<- max(pKas[i,],na.rm=T)
+      
+    } else if(httk_exp_data$Compound.type[i]=='ACID'){
+      
+      httk_exp_data$Acidic..pKa[i]<- min(pKas[i,],na.rm=T)
+      
+    }
+  }
+  
+  #-------------create final organised file --------------------------#
+
   ## build Simcyp compound import dataframe
-  CMPD_IMPORT <- data.frame( "Compound_Name" =toupper(as.character(httk_exp_data$COMPOUND.NAME)))
+  CMPD_IMPORT <- data.frame( "Compound_Name" = toupper(as.character(httk_exp_data$COMPOUND.NAME)))
   CMPD_IMPORT$CS_code <- httk_exp_data$Code
   
   #If the compound has no name, use its CS code
@@ -54,9 +86,7 @@ OrganiseInputData <- function (httk_exp_data, Vss_method = 3, Input_Dose = 100, 
   CMPD_IMPORT$Compound_ID <- paste(CMPD_IMPORT$Compound_Name, " ",
                                    "(",CMPD_IMPORT$ChEMBL_ID, "; ",
                                    CMPD_IMPORT$InChiKey,")", sep = "")
-  
-  #CMPD_IMPORT <- keep_df_cols(CMPD_IMPORT,c('CS_code','SMILES','Compound_ID'))
-  
+  #set route of administration
   CMPD_IMPORT$Route <- "Oral"
   
   if ('DOSE' %!in% colnames(httk_exp_data)){
@@ -106,8 +136,8 @@ OrganiseInputData <- function (httk_exp_data, Vss_method = 3, Input_Dose = 100, 
   
   CMPD_IMPORT <- rm_df_cols(CMPD_IMPORT,c('n','acidicpKa','basicpKa'))
   
-  if (!is.null(httk_exp_data$BP)){
-    CMPD_IMPORT$BP_value <- httk_exp_data$BP
+  if (!is.null(httk_exp_data$BP_value)){
+    CMPD_IMPORT$BP_value <- httk_exp_data$BP_value
     CMPD_IMPORT$BP_value <- ifelse(CMPD_IMPORT$Compound_type == "Monoprotic acid" &
                                      is.na(CMPD_IMPORT$BP_value), 0.55, CMPD_IMPORT$BP_value)
     
@@ -144,6 +174,7 @@ OrganiseInputData <- function (httk_exp_data, Vss_method = 3, Input_Dose = 100, 
   }
  
   CMPD_IMPORT$CLR <- "0"
+  CMPD_IMPORT$Systemic_CL <- httk_exp_data$Systemic_CL
   CMPD_IMPORT$molregno <- httk_exp_data$Molregno
   CMPD_IMPORT$CLint_sys <- "Hep"
   CMPD_IMPORT$CLint_hep <- httk_exp_data$CLint_value
@@ -155,13 +186,15 @@ OrganiseInputData <- function (httk_exp_data, Vss_method = 3, Input_Dose = 100, 
   CMPD_IMPORT$pKa2 <- as.numeric(CMPD_IMPORT$pKa2)
   CMPD_IMPORT$logPow <- as.numeric(CMPD_IMPORT$logPow)
   
-  #conform to rules about min and max of pKa1 and pKa2 in Simcyp (put here or later?)
+  #conform to rules about min and max of pKa1 and pKa2 in Simcyp
   CMPD_IMPORT$pKa1 <- ifelse(CMPD_IMPORT$pKa1 < 0, 0,  CMPD_IMPORT$pKa1)
   CMPD_IMPORT$pKa2 <- ifelse(CMPD_IMPORT$pKa2 < 0, 0,  CMPD_IMPORT$pKa2)
   CMPD_IMPORT$pKa1 <- ifelse(CMPD_IMPORT$pKa1 > 14, 14,  CMPD_IMPORT$pKa1)
   CMPD_IMPORT$pKa2 <- ifelse(CMPD_IMPORT$pKa2 > 14, 14,  CMPD_IMPORT$pKa2)
   
-  #logD values from ChEMBL are not used, we will rely on Kilford's calculations
+  # --------------- Conduct LogD7.4 and fu_hep calculations using Kilford equations ---------
+  
+  #logD values from ChEMBL are NOT used, we will rely on Kilford's calculations
   CMPD_IMPORT$logD_7.4<-''
   CMPD_IMPORT <- transform(CMPD_IMPORT, 
                            logD_7.4= ifelse(CMPD_IMPORT$Compound_type != 'Neutral' &
@@ -176,7 +209,7 @@ OrganiseInputData <- function (httk_exp_data, Vss_method = 3, Input_Dose = 100, 
   logD_ampholytes<-calculate.logD(CMPD_IMPORT$logPow[ampholytes],lowest_pka_vals)
   CMPD_IMPORT$logD_7.4[ampholytes]<-logD_ampholytes
   
-  
+  #calculate fraction unbound in hepatocytes
   CMPD_IMPORT$fu_inc<-''
   CMPD_IMPORT <- transform(CMPD_IMPORT, 
                            fu_inc = ifelse(Compound_type == "Monoprotic base" | Compound_type == "Neutral" | is.na(Compound_type), 
@@ -185,6 +218,6 @@ OrganiseInputData <- function (httk_exp_data, Vss_method = 3, Input_Dose = 100, 
   #organise in ascending CS number
   CMPD_IMPORT <- CMPD_IMPORT[order(CMPD_IMPORT$CS_code),]
   
-  return(CMPD_IMPORT[1:3,])
+  return(CMPD_IMPORT)
   
 }

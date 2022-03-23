@@ -38,7 +38,7 @@ ACD_inputs <- function(info, not_found_chembl,episuite_data, missing_info = T){
 }
 
 #extract important data from ACD Labs outputs and incorporate with remaining physiochemical information
-ACD_outputs <- function (info, ACD_data_directory, episuite_data){
+ACD_outputs <- function (info, ACD_data_directory, epi_data){
   
   #import the ACD labs datafile
   import<-loadWorkbook(ACD_data_directory, create=FALSE)
@@ -121,8 +121,8 @@ ACD_outputs <- function (info, ACD_data_directory, episuite_data){
   acd_data <- acd_data[!NA_rows,]
 
   #incorporate data to the physiochemical information from chembl and epi suite
-  x <- merge(episuite_data, acd_data,
-             by = 'Code', all= T)
+  x <- merge(epi_data, acd_data,
+             by = c('Code'), all= T)
   
   #Do not overwrite values extracted by episuite/chembl and copy over data
   x$MW.x <- ifelse(!is.na(x$MW.y)&is.na(x$MW.x),
@@ -148,31 +148,62 @@ ACD_outputs <- function (info, ACD_data_directory, episuite_data){
   #import the identifier values for newly found info
   missing_identifier1<-which(is.na(x$InChIKey))
   missing_identifier2<-which(is.na(x$SMILES))
-  missing_identifier3<-which(is.na(x$`CAS RegNo`))
   
-  missing_identifiers <- unique(c(missing_identifier1,
-                                  missing_identifier2,
-                                  missing_identifier3))
+  missing_identifiers <- unique(c(missing_identifier1, missing_identifier2))
   missing_compounds<-x$Code[missing_identifiers]
   indicies <- which(info$Code %in% missing_compounds)
   missing_information <- info[indicies,]
   
-  y <- merge(x,missing_information, by='Code',all=T)
+  y <- merge(x,missing_information, by=c('Code'),all=T)
+  
   y$SMILES.x <- ifelse(!is.na(y$SMILES.y)&is.na(y$SMILES.x),
                    y$SMILES.y, y$SMILES.x)
   y$COMPOUND.NAME <- ifelse(!is.na(y$Compound)&is.na(y$COMPOUND.NAME),
                        y$Compound, y$COMPOUND.NAME)
-  y$`CAS RegNo.x` <- ifelse(!is.na(y$`CAS RegNo.y`)&is.na(y$`CAS RegNo.x`),
-                    y$`CAS RegNo.y`, y$`CAS RegNo.x`)
   y$InChIKey <- ifelse(!is.na(y$InChiKey)&is.na(y$InChIKey),
                             y$InChiKey, y$InChIKey)
   
-  rmv_cols<- c('InChiKey','SMILES.y','CAS RegNo.y','Compound')
+  #handle the optional columns
+  potential_headers <- c('DOSE','DOSEUNITS','VSSMETHOD')
+  additional_names<-keep_df_cols(info,potential_headers)
+  if (length(additional_names)==0){
+    additional_names <- c()
+  } else{
+    indicies <- which(potential_headers %in% colnames(info))
+    additional_names <- potential_headers[indicies]
+  }
+  
+  #each additional name will have two suffixes (.x and .y), merge and rename
+  
+  new_names.x<-c();new_names.y<-c() #create separate names for .x and .y suffixes
+  if(!is.null(additional_names)){
+    for (i in 1:length(additional_names)){
+      new_names.x <-c(new_names.x,paste0(additional_names[i],'.x'))
+      new_names.y <- c(new_names.y,paste0(additional_names[i],'.y'))
+    }
+  }
+  
+  #carry over data from .y to .x for each of the additional names
+  for (i in 1:length(additional_names)){
+    x_data <- y[,new_names.x[i]]
+    y_data <- y[,new_names.y[i]]
+    xy_data<-data.frame(x_data,y_data)
+    xy_data$x_data<-ifelse(is.na(xy_data$x_data),xy_data$y_data, xy_data$x_data)
+    y[,new_names.x[i]]<-xy_data$x_data
+    y<-rm_df_cols(y,new_names.y[i])
+    new_name <- word('dose.x',1,sep = "\\.")
+    index<-which(colnames(y)=='DOSE.x')
+    colnames(y)[index]<-toupper(new_name)
+  }
+  
+  rmv_cols<- c('InChiKey','SMILES.y','Compound')
   y<-rm_df_cols(y,rmv_cols)
   
   #rename columns in x
   y <- y %>% rename(SMILES = SMILES.x)
-  y <- y %>% rename(`CAS RegNo` = `CAS RegNo.x`)
+  
+  #add the source as ACD Labs for missing PSA/HBD
+  y$data_source <- ifelse(is.na(y$data_source),'ACD/Labs Percepta',y$data_source)
   
   return(y)
 

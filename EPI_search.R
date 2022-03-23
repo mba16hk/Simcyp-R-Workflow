@@ -1,6 +1,6 @@
 
 #search the EPI Suite database for the missing compounds
-EPISearch <- function (data, NOT_FOUND, ChEMBL_search){
+EPISearch <- function (info, NOT_FOUND, ChEMBL_search){
   
   #set the working directory to the EPI suite database
   epi_dir<-paste0(dirname(dirname(rstudioapi::getSourceEditorContext()$path)),
@@ -39,6 +39,12 @@ EPISearch <- function (data, NOT_FOUND, ChEMBL_search){
   found_in_epi<- keep_df_cols(epi_dat, keep)
   found_in_epi$data_source <- 'EPI SUITE (EPA) - Experimental Data'
   
+  if (length(keep_df_cols(info,c('DOSE','DOSEUNITS','VSSMETHOD'))) > 0){
+    found_in_epi <- merge(found_in_epi, 
+                          keep_df_cols(info,c('InChiKey','DOSE','DOSEUNITS','VSSMETHOD')), 
+                          by = 'InChiKey', all.x = T)
+  }
+  
   rm(EPI)
   
   #search for logKow and MLWT values from susdat db (which uses EPI Suite values)
@@ -72,11 +78,22 @@ EPISearch <- function (data, NOT_FOUND, ChEMBL_search){
   #                     all=T)
   # rm(found_in_susdat,only_in_susdat, cmpd_names)
   
+  #find available columns and store in a vector
+  potential_headers <- c('DOSE','DOSEUNITS','VSSMETHOD')
+  additional_names<-keep_df_cols(info,potential_headers)
+  if (length(additional_names)==0){
+    additional_names <- c()
+  } else{
+    indicies <- which(potential_headers %in% colnames(info))
+    additional_names <- potential_headers[indicies]
+  }
+  
   #merge the EPI Suite data with the ChEMBL Search
   ChEMBL_EPI_search<-merge(ChEMBL_search, found_in_epi,
                            by.x = c('COMPOUND.NAME', 'SMILES', 'InChIKey', 'Code',
-                                    'MW', 'logPow','Acidic..pKa','data_source'), 
-                           by.y = c('Compound','SMILES', 'InChiKey','Code','EPI_MOLWT','EPI_KOW','EPI_PKA','data_source'),
+                                    'MW', 'logPow','Acidic..pKa','data_source', additional_names), 
+                           by.y = c('Compound','SMILES', 'InChiKey','Code','EPI_MOLWT',
+                                    'EPI_KOW','EPI_PKA','data_source',additional_names),
                            all= T)
   #Organise dataframe columns
   ChEMBL_EPI_search <- ChEMBL_EPI_search %>% relocate(MWfreebase, .after = MW)
@@ -90,11 +107,11 @@ EPISearch <- function (data, NOT_FOUND, ChEMBL_search){
   #repopulate SMILES and compound code
   missing_codes_indicies <- which(is.na(ChEMBL_EPI_search$Code))
   missing_codes_inchi <- ChEMBL_EPI_search$InChIKey[missing_codes_indicies]
-  found_codes_indicies <- which(data$InChiKey %in% missing_codes_inchi)
+  found_codes_indicies <- which(info$InChiKey %in% missing_codes_inchi)
   
   if (length(missing_codes_indicies)>0){
-    ChEMBL_EPI_search$Code[missing_codes_indicies]<-data$Code[found_codes_indicies]
-    ChEMBL_EPI_search$SMILES[missing_codes_indicies]<-data$SMILES[found_codes_indicies]
+    ChEMBL_EPI_search$Code[missing_codes_indicies]<-info$Code[found_codes_indicies]
+    ChEMBL_EPI_search$SMILES[missing_codes_indicies]<-info$SMILES[found_codes_indicies]
   }
   
   return(ChEMBL_EPI_search)
