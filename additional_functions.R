@@ -123,8 +123,9 @@ extract_info <- function(info_to_extract){
   Fa<- GetAllCompoundResults_DB('idfaAdj',compound = CompoundID$Substrate, info_to_extract)
   Fu_plasma <- GetAllCompoundResults_DB('idfuAdj', compound = CompoundID$Substrate, info_to_extract)
   Ka<- GetAllCompoundResults_DB('idkaAdj',compound = CompoundID$Substrate, info_to_extract) #absorption rate constant (1/h)
+  BP <- GetAllCompoundResults_DB('idbpAdj', compound = CompoundID$Substrate, info_to_extract) # BP ratio
   
-  data_from_dB<-cbind(AUC_data,BSA,Age,BW,GFR,Vss,Fg,Fh,Fa,Fu_plasma,Ka)
+  data_from_dB<-cbind(AUC_data,BSA,Age,BW,GFR,Vss,Fg,Fh,Fa,Fu_plasma,Ka,BP)
   
   rmv <- c('ProfileIndex','Inhibition','DiffStoreIndex','Dose',
            'StartTime','EndTime','Tmin','Cmin', 'AUCt_full',
@@ -188,14 +189,14 @@ plot_profile <- function(casestudy_ID, Output, units = 'mg/L', curated_data, log
     g1 <- g1 + xlab("Time (hours)") + ylab(ytitle)
     g1 <- g1 + ggtitle(header) + 
       labs(color  = "Subjects", linetype = 1)+ theme(
-      plot.background = element_rect(fill = "white", colour = NA),
-      panel.background = element_rect(fill = "white", colour = NA),
-      axis.line.x = element_line(color="black", size = 1),
-      axis.line.y = element_line(color="black", size = 1),
-      panel.grid.major = element_line(color = "grey"),
-      panel.grid.minor = element_line(color = "grey"),
-      axis.text = element_text(colour = "black"),
-      axis.title = element_text(colour = "black")
+        plot.background = element_rect(fill = "white", colour = NA),
+        panel.background = element_rect(fill = "white", colour = NA),
+        axis.line.x = element_line(color="black", size = 1),
+        axis.line.y = element_line(color="black", size = 1),
+        panel.grid.major = element_line(color = "grey"),
+        panel.grid.minor = element_line(color = "grey"),
+        axis.text = element_text(colour = "black",size=12),
+        axis.title = element_text(colour = "black",size=14,face="bold")
     )
     
     #determine the breaks
@@ -231,8 +232,8 @@ plot_profile <- function(casestudy_ID, Output, units = 'mg/L', curated_data, log
       axis.line.y = element_line(color="black", size = 1),
       panel.grid.major = element_line(color = "grey"),
       panel.grid.minor = element_line(color = "grey"),
-      axis.text = element_text(colour = "black"),
-      axis.title = element_text(colour = "black")
+      axis.text = element_text(colour = "black",size=12),
+      axis.title = element_text(colour = "black",size=14,face="bold")
     )
   }
   
@@ -240,7 +241,7 @@ plot_profile <- function(casestudy_ID, Output, units = 'mg/L', curated_data, log
 
 plot_parameters<-function(simcyp_outputs, Compound, 
                           plot_type = 'Distribution', x_variable, y_variable,
-                          background_color){
+                          chosen_col){
   require(ggplot2)
   #Extract data relationg to compound of interest
   compound_IDs<- names(simcyp_outputs)
@@ -258,30 +259,44 @@ plot_parameters<-function(simcyp_outputs, Compound,
     header<-paste(Compound,'Distribution of', x_variable, sep=' ')
     
     # Distributions are plotted as density plots (only x variable is considered)
-    ggplot(outputs, aes(x=outputs[,x_col], fill= background_color)) +
+    ggplot(outputs, aes(x=outputs[,x_col], colour= chosen_col, fill = chosen_col)) +
       geom_density(alpha=0.4)+ ggtitle(header)+ xlab(x_axis_label)+
-      theme(legend.position = "None")
+      scale_color_manual(values= chosen_col) +
+      scale_fill_manual(values= chosen_col) +
+      theme(legend.position = "None",
+            plot.background = element_rect(fill = "white", colour = NA),
+            panel.background = element_rect(fill = "white", colour = NA),
+            axis.line.x = element_line(color="black", size = 1),
+            axis.line.y = element_line(color="black", size = 1),
+            panel.grid.major = element_line(color = "grey"),
+            panel.grid.minor = element_line(color = "grey"),
+            axis.text = element_text(colour = "black",size=12),
+            axis.title = element_text(colour = "black",size=14,face="bold"))
     
   } else if (plot_type == 'Relationship'){
-    
-    #Create Title for plot
-    header<-paste(Compound,'Relationship between', x_variable,'and', y_variable ,sep=' ')
     
     #create y axis label
     y_axis_label <- paste(y_variable, determine_units(y_variable), sep=' ')
     
     #find the correlation coefficient
-    cor_coeff<- cor(outputs[,x_col],outputs[,y_col])
+    cor_coeff<- round(cor(outputs[,x_col],outputs[,y_col]),2)
+    
+    #Create Title for plot
+    header<-paste(Compound,' Relationship between ', x_variable,' and ', y_variable,' (r = ',cor_coeff,')' ,sep='')
     
     #relationships are scatter diagrams where x and y variables are needed
     g1 <- ggplot(outputs, aes(x = outputs[,x_col], y = outputs[,y_col]))
-    g1 <- g1 + geom_point() + geom_line() 
+    g1 <- g1 + geom_point() + geom_line(color=chosen_col, size = 1) 
     g1 <- g1 + xlab(x_axis_label) + ylab(y_axis_label)
     g1 + ggtitle(header) + theme(
       plot.background = element_rect(fill = "white", colour = NA),
-      panel.background = element_rect(fill = background_color, colour = NA),
-      axis.text = element_text(colour = "black"),
-      axis.title = element_text(colour = "black")
+      panel.background = element_rect(fill = "white", colour = NA),
+      axis.line.x = element_line(color="black", size = 1),
+      axis.line.y = element_line(color="black", size = 1),
+      panel.grid.major = element_line(color = "grey"),
+      panel.grid.minor = element_line(color = "grey"),
+      axis.text = element_text(colour = "black",size=12),
+      axis.title = element_text(colour = "black",size=14,face="bold")
     )
   }
   
@@ -303,7 +318,7 @@ compare_simulated_compound <- function(summary_simcyp, parameter, bar_order, bar
     df <- df[order(df$Compounds),]
   }
   
-  header<-paste(parameter,'Variation across Simulated Compounds',sep=' ')
+  header<-paste('Mean',parameter,'Variation Across Simulated Compounds',sep=' ')
   
   ggplot(df, aes(x=Compounds, y= parameter)) +
     ylab(parameter)+
@@ -313,11 +328,12 @@ compare_simulated_compound <- function(summary_simcyp, parameter, bar_order, bar
                        theme(
       plot.background = element_rect(fill = "white", colour = NA),
       panel.background = element_rect(fill = "white", colour = NA),
-      axis.line.y = element_line(color="grey", size = 1),
+      axis.line.x = element_line(color="black", size = 1),
+      axis.line.y = element_line(color="black", size = 1),
       panel.grid.major = element_line(color = "grey"),
       panel.grid.minor = element_line(color = "grey"),
-      axis.text = element_text(colour = "black"),
-      axis.title = element_text(colour = "black"))
+      axis.text = element_text(colour = "black",size=12),
+      axis.title = element_text(colour = "black",size=14,face="bold"))
 }
 
 #function to check if all columns are present
