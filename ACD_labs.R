@@ -148,15 +148,14 @@ ACD_outputs <- function (info, ACD_data_directory, epi_data){
   #import the identifier values for newly found info
   missing_identifier1<-which(is.na(x$InChIKey))
   missing_identifier2<-which(is.na(x$SMILES))
-  #missing_identifier3<-which(is.na(x$`CAS RegNo`))
   
-  missing_identifiers <- unique(c(missing_identifier1,
-                                  missing_identifier2))
+  missing_identifiers <- unique(c(missing_identifier1, missing_identifier2))
   missing_compounds<-x$Code[missing_identifiers]
   indicies <- which(info$Code %in% missing_compounds)
   missing_information <- info[indicies,]
   
-  y <- merge(x,missing_information, by='Code',all=T)
+  y <- merge(x,missing_information, by=c('Code'),all=T)
+  
   y$SMILES.x <- ifelse(!is.na(y$SMILES.y)&is.na(y$SMILES.x),
                    y$SMILES.y, y$SMILES.x)
   y$COMPOUND.NAME <- ifelse(!is.na(y$Compound)&is.na(y$COMPOUND.NAME),
@@ -164,7 +163,40 @@ ACD_outputs <- function (info, ACD_data_directory, epi_data){
   y$InChIKey <- ifelse(!is.na(y$InChiKey)&is.na(y$InChIKey),
                             y$InChiKey, y$InChIKey)
   
-  rmv_cols<- c('InChiKey','SMILES.y','CAS RegNo.y','Compound')
+  #handle the optional columns
+  potential_headers <- c('DOSE','DOSEUNITS','VSSMETHOD')
+  additional_names<-keep_df_cols(info,potential_headers)
+  if (length(additional_names)==0){
+    additional_names <- c()
+  } else{
+    indicies <- which(potential_headers %in% colnames(info))
+    additional_names <- potential_headers[indicies]
+  }
+  
+  #each additional name will have two suffixes (.x and .y), merge and rename
+  
+  new_names.x<-c();new_names.y<-c() #create separate names for .x and .y suffixes
+  if(!is.null(additional_names)){
+    for (i in 1:length(additional_names)){
+      new_names.x <-c(new_names.x,paste0(additional_names[i],'.x'))
+      new_names.y <- c(new_names.y,paste0(additional_names[i],'.y'))
+    }
+  }
+  
+  #carry over data from .y to .x for each of the additional names
+  for (i in 1:length(additional_names)){
+    x_data <- y[,new_names.x[i]]
+    y_data <- y[,new_names.y[i]]
+    xy_data<-data.frame(x_data,y_data)
+    xy_data$x_data<-ifelse(is.na(xy_data$x_data),xy_data$y_data, xy_data$x_data)
+    y[,new_names.x[i]]<-xy_data$x_data
+    y<-rm_df_cols(y,new_names.y[i])
+    new_name <- word('dose.x',1,sep = "\\.")
+    index<-which(colnames(y)=='DOSE.x')
+    colnames(y)[index]<-toupper(new_name)
+  }
+  
+  rmv_cols<- c('InChiKey','SMILES.y','Compound')
   y<-rm_df_cols(y,rmv_cols)
   
   #rename columns in x
