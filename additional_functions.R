@@ -137,7 +137,7 @@ extract_info <- function(info_to_extract){
 }
 
 # Function from plotting conc-time profiles for each compound
-plot_profile <- function(casestudy_ID, Output, units = 'mg/L', curated_data, logy=F){
+plot_profile <- function(casestudy_ID, Output, units = 'ng/mL', curated_data, logy=F){
   
   require(ggplot2)
   require(scales)
@@ -184,7 +184,7 @@ plot_profile <- function(casestudy_ID, Output, units = 'mg/L', curated_data, log
   if (logy == T){
     
     #Plot the mean profile (y axis normal scale)
-    g1 <- ggplot(df, aes(x = Times, y = Conc, group = factor(Sub))) + geom_line(aes(color=factor(Sub)), size = 1, linetype = 1)
+    g1 <- ggplot(df, aes(x = Times, y = Conc, group = factor(Sub))) + geom_line(aes(color=factor(Sub)), size = 1.5, linetype = 1)
     g1 <- g1 + geom_line() 
     g1 <- g1 + xlab("Time (hours)") + ylab(ytitle)
     g1 <- g1 + ggtitle(header) + 
@@ -199,26 +199,29 @@ plot_profile <- function(casestudy_ID, Output, units = 'mg/L', curated_data, log
         axis.title = element_text(colour = "black",size=14,face="bold")
     )
     
+    g1 + scale_y_continuous(trans='log10')
+    
     #determine the breaks
     
     #start by determining the maximum value of the y axis
-    max_val <- roundUp(max(df$Conc))
+    # max_val <- roundUp(max(df$Conc))
+    # 
+    # #is the maximum value is more than 2x larger than the 
+    # #actual maximum value, reduce the maximum value by half
+    # if (max(df$Conc)<(0.5*max_val)){
+    #   max_val <- 0.5* max_val
+    #   max_val2<-roundDown(max_val)
+    #   break_set1<-c(max_val2,max_val2/10,max_val2/100,max_val2/1000)
+    #   break_set2<-c(max_val, break_set1[1:2]/2)
+    # } else{
+    #   break_set1<-c(max_val,max_val/10,max_val/100,max_val/1000)
+    #   break_set2<-break_set1[1:3]/2
+    # }
+    # g1 +  scale_y_continuous(trans = scales::pseudo_log_trans(base = 10),
+    #                          breaks=c(0, break_set1, break_set2))
     
-    #is the maximum value is more than 2x larger than the 
-    #actual maximum value, reduce the maximum value by half
-    if (max(df$Conc)<(0.5*max_val)){
-      max_val <- 0.5* max_val
-      max_val2<-roundDown(max_val)
-      break_set1<-c(max_val2,max_val2/10,max_val2/100,max_val2/1000)
-      break_set2<-c(max_val, break_set1[1:2]/2)
-    } else{
-      break_set1<-c(max_val,max_val/10,max_val/100,max_val/1000)
-      break_set2<-break_set1[1:3]/2
-    }
     
-    g1 +  scale_y_continuous(trans = scales::pseudo_log_trans(base = 10),
-                             breaks=c(0, break_set1, break_set2))
-    
+   
   } else {
     
     #Plot the mean profile (y axis normal scale)
@@ -286,7 +289,7 @@ plot_parameters<-function(simcyp_outputs, Compound,
     
     #relationships are scatter diagrams where x and y variables are needed
     g1 <- ggplot(outputs, aes(x = outputs[,x_col], y = outputs[,y_col]))
-    g1 <- g1 + geom_point() + geom_line(color=chosen_col, size = 1) 
+    g1 <- g1 + geom_point(colour = chosen_col) + geom_smooth(method = "lm", se = FALSE, colour = chosen_col)  
     g1 <- g1 + xlab(x_axis_label) + ylab(y_axis_label)
     g1 + ggtitle(header) + theme(
       plot.background = element_rect(fill = "white", colour = NA),
