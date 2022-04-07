@@ -7,10 +7,12 @@ library(shinyWidgets)
 
 
 setwd(dirname(rstudioapi::getSourceEditorContext()$path))
+#import the scripts 
 source('input_query.R')
 source('chembl_search.R')
-source('EPI_search.R')
-source('ACD_labs.R')
+#source('EPI_search.R')
+source('susdat_search.R')
+source('ACD_Labs.R')
 source('httk_search.R')
 source('experimental_data_search.R')
 source('organise_simulation_data.R')
@@ -217,7 +219,7 @@ ui <- dashboardPage( skin = 'black',
                                     style = 'color: #fff;
                                      background-color: #a44f2e; 
                                      border-color: #8a2b07'),#end of action button
-                       "Predict Fu, Vss and BP using Simcyp",
+                       "Predict Fu, Vss, BP and Kd using Simcyp",
                        placement="top", trigger = "hover"),
                 
                 box(
@@ -259,6 +261,11 @@ ui <- dashboardPage( skin = 'black',
                                           list("mg/kg" = "mg/kg",
                                                "mg" = "mg",
                                                "mg/m^2" = "mg/m^2"))),
+                        
+                        selectInput('administration_route',
+                                    'Administration Route',
+                                    list("Oral" = "Oral",
+                                         "IV Bolus" = "IV Bolus")),
                         
                         fluidRow(
                           
@@ -405,12 +412,13 @@ ui <- dashboardPage( skin = 'black',
                   
                   #select plot colour
                   selectInput('plot_col', 'Plot Colour',
-                              choices = list('Green'= 'darkseagreen1',
-                                             'Grey'='gray87',
-                                             'Yellow'='khaki1',
-                                             'Pink'='lightpink',
-                                             'Purple'='thistle',
-                                             'Orange'='lightsalmon')),
+                              choices = list('Green'= 'seagreen',
+                                             'Red' = 'red',
+                                             'Blue'='blue',
+                                             'Yellow'='Gold',
+                                             'Pink'='pink',
+                                             'Purple'='purple',
+                                             'Orange'='orange')),
                   
                   plotOutput("additional_plot"),
                   status = "success", 
@@ -442,12 +450,13 @@ ui <- dashboardPage( skin = 'black',
                   
                   #select plot colour
                   selectInput('plot_col_2', 'Bar Colour',
-                              choices = list('Green'= 'darkseagreen1',
-                                             'Grey'='gray87',
-                                             'Yellow'='khaki1',
-                                             'Pink'='lightpink',
-                                             'Purple'='thistle',
-                                             'Orange'='lightsalmon')),
+                              choices = list('Green'= 'seagreen',
+                                             'Red' = 'red',
+                                             'Blue'='blue',
+                                             'Yellow'='Gold',
+                                             'Pink'='pink',
+                                             'Purple'='purple',
+                                             'Orange'='orange')),
 
                   
                   plotOutput("comp_comparison_plot"),
@@ -516,13 +525,13 @@ server <- function(input, output, session) {
     })
     
     
-    epi_data <- eventReactive(input$search_physchem,{
+    sus_data <- eventReactive(input$search_physchem,{
         #query the epi suite database
-        EPISearch(data(), not_found_in_chembl(), chembl_data())
+      SusdatSearch(data(), not_found_in_chembl(), chembl_data())
     })
     
     
-    output$TBL2 <- renderDataTable(epi_data(),
+    output$TBL2 <- renderDataTable(sus_data(),
                                    rownames = FALSE,
                                    extensions = list('Scroller' = NULL),
                                    options = list(
@@ -539,9 +548,10 @@ server <- function(input, output, session) {
                                      dom = 'tB'
                                    ))
     
+
     nf_compounds <- eventReactive(c(input$search_physchem, input$include_compounds),{
-        #extract the compounds not found in EPI
-      ACD_inputs(data(), not_found_in_chembl(), epi_data(), missing_info = input$include_compounds)
+        #extract the compounds not found in susdat
+      ACD_inputs(data(), not_found_in_chembl(), sus_data(), missing_info = input$include_compounds)
     })
     
     output$ACDLabs_box<-reactive(!is.null(nf_compounds()))
@@ -569,7 +579,7 @@ server <- function(input, output, session) {
     acd_data <- eventReactive(c(input$refresh_physchem,input$upload_ACD_labs),{
       file3 <- input$file3
       req(file3)
-      ACD_outputs(data(),file3$datapath,epi_data())
+      ACD_outputs(data(),file3$datapath,sus_data())
     })
     
     output$TBL7 <- renderDataTable(acd_data(),
@@ -592,27 +602,38 @@ server <- function(input, output, session) {
     output$expdummy<-reactive(!is.null(input$file2))
     outputOptions(output, "expdummy", suspendWhenHidden = FALSE)
     
+    CAS_DTXSID <- eventReactive(c(input$search_exp,input$search_httk_db),{
+      
+      CAS_and_DTXSID(data())
+    })
+    
     physchem_data<-eventReactive(c(input$search_exp,input$search_httk_db),{
-      if(exists('acd_data()')){
 
+      file3 <- input$file3
+      #print(file3)
+      
+      if(!is.null(file3)){
+        
         return(acd_data())
         
-      } else{
 
-        return(epi_data())
-        
+      } else{
+      
+        return(sus_data())
+
       }
     })
-    
+
     httk_only_data <- eventReactive(input$search_httk_db,{
       #query the httk database
-      httkSearch(physchem_data())
+      httkSearch(physchem_data(),CAS_DTXSID(), info = data())
     })
-    
+
     httk_data <- eventReactive(input$search_exp, {
         #query the httk database
-        httkSearch(physchem_data())
+        httkSearch(physchem_data(),CAS_DTXSID(), info = data())
     })
+    
     
     httk_exp_data <- eventReactive(input$search_exp, {
         #incorporate findings from experimental data
@@ -622,13 +643,8 @@ server <- function(input, output, session) {
                       experimental_data_directory = file2$datapath,
                       CL_threshold = input$CL_thresh,
                       BP_threshold = input$BP_thresh,
-                      fu_threshold = input$fu_thresh,
-                      mean_flag = 0)
+                      fu_threshold = input$fu_thresh, mean_flag = 0)
     })
-    
-    # observe({
-    #   your_global_variable <<- httk_exp_data()
-    # })
     
     #check if the experimental data is incorporated
     experimental_data<-eventReactive(c(input$search_exp,input$search_httk_db),{
@@ -640,6 +656,7 @@ server <- function(input, output, session) {
         
       }
     })
+    
     
     #only if the experimental data has been collected, does the simulate button appear
     output$simulate_check<-reactive(!is.null(experimental_data()))
@@ -672,11 +689,17 @@ server <- function(input, output, session) {
       #organise the physiochemical and experimental data
       OrganiseInputData(experimental_data(), Vss_method = input$pred_method,
                         Input_Dose = input$dose_value, UNITS = input$dose_units,
-                        info = data())
+                        info = data(), admin_route = input$administration_route)
+      #print(hi)
+      #return(hi)
+    })
+    
+    observe({
+      org_data <<- organised_data()
     })
     
     predicted_variables <- eventReactive(input$predict_params_button,{
-      #Get predicted for fu, BP and Vss
+      #Get predicted for fu, BP, Vss and Kd
       PredictParameters(organised_data())
     })
     
@@ -776,7 +799,7 @@ server <- function(input, output, session) {
     
     output$conc_time_plot <- renderPlot({
       plot_profile(input$comp_code, output_profiles(),
-           units=input$unit, curated_data = physchem_data(), 
+           units=input$unit, curated_data = experimental_data(), 
            logy = input$log_scale)
     })
     
@@ -791,7 +814,7 @@ server <- function(input, output, session) {
                       plot_type = input$plot_type,
                       x_variable = input$x_axis_var,
                       y_variable = input$y_axis_var,
-                      background_color = input$plot_col)
+                      chosen_col = input$plot_col)
     })
     
     output$HelpPageText <- renderUI ({
