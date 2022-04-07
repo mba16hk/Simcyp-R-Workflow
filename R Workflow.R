@@ -6,6 +6,7 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time) {
   info <- Compound
   
   #specify compoind CS ID
+  message( "--------------------------------------------")
   message( paste("Compound" , info$CS_code) )
   
   # Set Parameters 
@@ -78,7 +79,6 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time) {
     Simcyp::SetCompoundParameter("fu",CompoundID$Substrate, 1L ) 
     # predicted fu from Simcyp
     Pred_fu<-Simcyp::GetCompoundParameter("idFu2",CompoundID$Substrate)  
-    message(paste("Predicted Fu =", round(Pred_fu,3), sep="")) 
     
   } else{
     message(paste("Setting User-input Fu =", info$fu_value, sep=""))
@@ -95,7 +95,7 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time) {
       Simcyp::SetCompoundParameter("BP",CompoundID$Substrate, 1L )  
       message("BP not specified by user. Predicted BP used instead.")
       Pred_bp<-Simcyp::GetCompoundParameter("BP",CompoundID$Substrate)
-      message(paste("Predicted BP =", round(Pred_bp,3), sep=""))
+
     } else {
       #insert user-input BP
       Simcyp::SetCompoundParameter(CompoundParameterID$bp,CompoundID$Substrate, as.numeric(info$BP_value))
@@ -139,28 +139,28 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time) {
   # Set CLint Value if it is not NA
   # -------------------------------
   if (!is.na(info$CLint_value)){
-    SetCompoundParameter("idEK_HEP_Clint",CompoundID$Substrate, as.numeric(info$CLint_value))
+    Simcyp::SetCompoundParameter("idEK_HEP_Clint",CompoundID$Substrate, as.numeric(info$CLint_value))
     message("CLint value provided by the user.")
   }
   
   # Input the calculated fu_inc value
   # ----------------------------------
-  SetCompoundParameter(CompoundParameterID$WOMC_HepatocyteFUinc1, 
+  Simcyp::SetCompoundParameter(CompoundParameterID$WOMC_HepatocyteFUinc1, 
                        CompoundID$Substrate, as.numeric(info$fu_inc))
 
   
   #Set the input dose and their respective Units
   #---------------------------------------------
-  SetCompoundParameter(CompoundParameterID$Dose, CompoundID$Substrate, as.numeric(info$Dose))
+  Simcyp::SetCompoundParameter(CompoundParameterID$Dose, CompoundID$Substrate, as.numeric(info$Dose))
   
   if (info$Dose_Units == "mg/kg"){
-    SetCompoundParameter(CompoundParameterID$DoseType, CompoundID$Substrate, 2L)
+    Simcyp::SetCompoundParameter(CompoundParameterID$DoseType, CompoundID$Substrate, 2L)
     Units <- GetCompoundParameter(CompoundParameterID$DoseType,CompoundID$Substrate)
   } else if (info$Dose_Units == "mg"){
-    SetCompoundParameter(CompoundParameterID$DoseType, CompoundID$Substrate, 1L)
+    Simcyp::SetCompoundParameter(CompoundParameterID$DoseType, CompoundID$Substrate, 1L)
     Units <- GetCompoundParameter(CompoundParameterID$DoseType,CompoundID$Substrate)
   } else if (info$Dose_Units == "mg/m^2"){
-    SetCompoundParameter(CompoundParameterID$DoseType, CompoundID$Substrate, 0L)
+    Simcyp::SetCompoundParameter(CompoundParameterID$DoseType, CompoundID$Substrate, 0L)
     Units <- GetCompoundParameter(CompoundParameterID$DoseType,CompoundID$Substrate)
   }
   
@@ -168,16 +168,16 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time) {
   message(paste('Setting dose to', as.numeric(info$Dose),unit_names[Units+1], sep=' '))
   
   # 2.1 Set the Number of Trials
-  SetParameter(SimulationParameterID$Group,CategoryID$SimulationData, CompoundID$Substrate, as.integer(trials)) # Trial num
-  print(paste('trials:',GetParameter(SimulationParameterID$Group,CategoryID$SimulationData, CompoundID$Substrate), sep = ' '))
+  Simcyp::SetParameter(SimulationParameterID$Group,CategoryID$SimulationData, CompoundID$Substrate, as.integer(trials)) # Trial num
+  #print(paste('trials:',GetParameter(SimulationParameterID$Group,CategoryID$SimulationData, CompoundID$Substrate), sep = ' '))
 
   # 2.2 Set the Number of Subjects for each trial
-  SetParameter(Simcyp::SimulationParameterID$Mempgroup,CategoryID$SimulationData, CompoundID$Substrate,as.integer(subjects))
-  print(paste('subjects:',GetParameter(Simcyp::SimulationParameterID$Mempgroup,CategoryID$SimulationData, CompoundID$Substrate), sep = ' '))
+  Simcyp::SetParameter(Simcyp::SimulationParameterID$Mempgroup,CategoryID$SimulationData, CompoundID$Substrate,as.integer(subjects))
+  message(paste('Simulating',GetParameter(Simcyp::SimulationParameterID$Mempgroup,CategoryID$SimulationData, CompoundID$Substrate), 'subjects.', sep = ' '))
   
   GetParameter(SimulationParameterID$Pop,CategoryID$SimulationData, CompoundID$Substrate)   # Population Size. This has not changed yet, one needs to change this also to => trial*subject 
   SetParameter(SimulationParameterID$Pop,CategoryID$SimulationData, CompoundID$Substrate,as.integer(trials*subjects))
-  print(paste('product:',as.integer(trials*subjects), sep = ' '))
+  #print(paste('product:',as.integer(trials*subjects), sep = ' '))
   
   #set the simulation duration
   Set_SimDuration(Time)
@@ -201,7 +201,7 @@ SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects,
     #Select 1 compound at a time
     Data<- data[i,]
     
-    # Set workspace for MechKiM model
+    # Set workspace
     capture.output(Simcyp::SetWorkspace(workspace), file='NUL')
     
     # Set the parameters of the compound in the loaded workspace
@@ -263,6 +263,18 @@ SimcypSimulation <- function (organised_data, trials = 1, subjects, Time){
   
   #create a list of workspaces in the directory
   SimcypWksz<-unlist(list.files(path_user, pattern="\\.wksz$",full.names=FALSE , recursive=F ))
+  
+  if (organised_data$Route[1] == 'Oral'){
+    
+    oral_wkspace_indicies <- str_detect(SimcypWksz,'Oral')
+    SimcypWksz = SimcypWksz[oral_wkspace_indicies]
+    
+  } else if (organised_data$Route[1] == 'IV Bolus'){
+    
+    bolus_wkspace_indicies <- str_detect(SimcypWksz,'Bolus')
+    SimcypWksz = SimcypWksz[bolus_wkspace_indicies]
+    
+  }
   
   # Separating the data based on Clint value. 
   Mechkim <- organised_data %>% filter(is.na(CLint_value) )  

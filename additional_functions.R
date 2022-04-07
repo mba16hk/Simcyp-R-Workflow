@@ -463,23 +463,23 @@ Set_SimDuration <- function(Time) {   # Note this function works only for durati
   # Set End Day 
   EndDay<- (Time/24)+1
   SetParameter(SimulationParameterID$EndDay,CategoryID$SimulationData, CompoundID$Substrate, as.integer(EndDay))
-  message(paste('Setting End day to ',EndDay  , sep= ' '))
+  #message(paste('Setting End day to ',EndDay  , sep= ' '))
   
   # Set number of doses
   NumDose<- (EndDay-1)*2
   SetParameter(SimulationParameterID$CmpNumDoses1,CategoryID$SimulationData, CompoundID$Substrate, as.integer(NumDose))  # Number dose 2 idNumberDoses2
   SetParameter(SimulationParameterID$CmpNumDoses2,CategoryID$SimulationData, CompoundID$Substrate, as.integer(NumDose))  # Number dose 3 idNumberDoses3
   SetParameter(SimulationParameterID$CmpNumDoses3,CategoryID$SimulationData, CompoundID$Substrate, as.integer(NumDose))  # Number dose 4 idNumberDoses
-  message(paste('Setting number doses to ', NumDose , sep= ' '))
+  #message(paste('Setting number doses to ', NumDose , sep= ' '))
   
   Button<-  if (EndDay<= 2){
     
     SetParameter(SimulationParameterID$VariablePop,CategoryID$SimulationData, CompoundID$Substrate, FALSE)
-    message(paste('Setting Size button to False', sep= ' '))  
+    #message(paste('Setting Size button to False', sep= ' '))  
   } else {
     
     SetParameter(SimulationParameterID$VariablePop,CategoryID$SimulationData, CompoundID$Substrate, TRUE)
-    message(paste('Setting Size button to True', sep= ' ')) 
+    #message(paste('Setting Size button to True', sep= ' ')) 
   }
   
 }
