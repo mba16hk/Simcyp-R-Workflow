@@ -1,4 +1,9 @@
 #Additional Functions
+library(stringr)
+library(XLConnect)
+library(tools)
+library(dplyr)
+library(RSQLite)
 
 #Remove Columns by name
 rm_df_cols <-function(df, column_names){
@@ -476,5 +481,36 @@ Set_SimDuration <- function(Time) {   # Note this function works only for durati
     SetParameter(SimulationParameterID$VariablePop,CategoryID$SimulationData, CompoundID$Substrate, TRUE)
     message(paste('Setting Size button to True', sep= ' ')) 
   }
+  
+}
+
+#function to determine if cols in df match with cols of a different dataframe
+match.df <- function(df1, df2, colnames_to_match){
+  
+  #keep the columns we want to compare
+  df1 <- keep_df_cols(df1, colnames_to_match)
+  df2 <- keep_df_cols(df2, colnames_to_match)
+  
+  #collapse each df into a single string vector (rows are pasted together)
+  df_args <- c(df1, sep=" ")
+  df1_collapsed <- do.call(paste, df_args)
+  
+  df_args <- c(df2, sep=" ")
+  df2_collapsed <- do.call(paste, df_args)
+  
+  #identify matches
+  matches <- which(df1_collapsed %in% df2_collapsed)
+  
+  #identify mismatches
+  mismatches <- which(df1_collapsed %!in% df2_collapsed)
+  
+  #create a empty vector
+  matched_mismatched <- rep(NA, nrow(df1))
+  
+  #populate with binary values (T for natched, F for mismatch)
+  matched_mismatched[matches]<- TRUE
+  matched_mismatched[mismatches]<- FALSE
+  
+  return(matched_mismatched)
   
 }

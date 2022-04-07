@@ -230,6 +230,6 @@ OrganiseInputData <- function (httk_exp_data, info,
   #organise in ascending CS number
   CMPD_IMPORT <- CMPD_IMPORT[order(CMPD_IMPORT$CS_code),]
   
-  return(CMPD_IMPORT)
+  return(CMPD_IMPORT[1:5,])
   
 }

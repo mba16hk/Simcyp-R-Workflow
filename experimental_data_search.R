@@ -64,7 +64,7 @@ ExpDataSearch <- function (httk_data, experimental_data_directory,
                                  httk_exp_data$BP)
   
   #if there is identify the source of non-experimental BP data
-  httk_exp_data$BP.exp_source <- ifelse(is.na(httk_exp_data$BP.exp_source) & !is.na(httk_exp_data$BP),
+  httk_exp_data$BP.exp_source <- ifelse(is.na(httk_exp_data$BP.exp_source) & !is.na(httk_exp_data$BP_fin),
                                         httk_exp_data$BP_source,
                                         httk_exp_data$BP.exp_source)
   
@@ -83,7 +83,7 @@ ExpDataSearch <- function (httk_data, experimental_data_directory,
                                        httk_exp_data$fu_source)
   
   #------------------------------- CLINT DATA ---------------------------
-  #first merge two columns together for the source and value of CLint
+  # merge two columns together for the source and value of CLint
   #----------------------------------------------------------------------
   
   #if experimental data is missing, use the httk data
@@ -175,58 +175,58 @@ ExpDataSearch <- function (httk_data, experimental_data_directory,
 
 }
 
-CaseStudyTable <- function (httk_exp_data, experimental_data_directory){
-  
-  #ensure file exists and extract extensions
-  if (file.exists(experimental_data_directory)) {
-    
-    #extract file extensions
-    extension <- file_ext(experimental_data_directory)
-    
-  } else {
-    
-    return(cat("The file does not exist"))
-    
-  }
-  
-  #load the data based on the extracted extension
-  if (extension == 'xlsx'){
-    import<-loadWorkbook(experimental_data_directory, create=FALSE)
-    exp_data <- readWorksheet(import,  header = TRUE, sheet = 1)
-  } else {
-    return(cat("File type not compatible."))
-  }
-  
-  #identify case studies in experimental data
-  CS <- sub("\\-.*", "", exp_data$CODE)
-  exp_data <- cbind(exp_data, CS)
-  
-  #inchikeys and case-study IDs
-  inchi_CSID <- keep_df_cols(httk_exp_data,c('InChIKey','Code'))
-  exp_data <- merge (exp_data, inchi_CSID,
-                     by.y = 'Code' , by.x = 'CODE' , all.x = T)
-  
-  #Identify Casestudies and freq of occurrence of experimental data
-  case_studies <- data.frame(table(httk_exp_data$CS))
-  case_studies$CLint_Data <- 0
-  case_studies$fu_Data <- 0
-  case_studies$BP_Data <- 0
-  
-  for (i in 1:nrow(case_studies)){
-    
-    CS_indicies<-which(httk_exp_data$CS == case_studies[i,1])
-    
-    clint_data <- which(!is.na(httk_exp_data$CLint_value[CS_indicies]))
-    case_studies[i,3] <- length(clint_data)
-    
-    fu_data <- which(!is.na(httk_exp_data$fu_value[CS_indicies]))
-    case_studies[i,4] <- length(fu_data)
-    
-    bp_data <- which(!is.na(httk_exp_data$BP_value[CS_indicies]))
-    case_studies[i,5] <- length(bp_data)
-    
-  }
-  
-  return(case_studies)
-  
-}
+# CaseStudyTable <- function (httk_exp_data, experimental_data_directory){
+#   
+#   #ensure file exists and extract extensions
+#   if (file.exists(experimental_data_directory)) {
+#     
+#     #extract file extensions
+#     extension <- file_ext(experimental_data_directory)
+#     
+#   } else {
+#     
+#     return(cat("The file does not exist"))
+#     
+#   }
+#   
+#   #load the data based on the extracted extension
+#   if (extension == 'xlsx'){
+#     import<-loadWorkbook(experimental_data_directory, create=FALSE)
+#     exp_data <- readWorksheet(import,  header = TRUE, sheet = 1)
+#   } else {
+#     return(cat("File type not compatible."))
+#   }
+#   
+#   #identify case studies in experimental data
+#   CS <- sub("\\-.*", "", exp_data$CODE)
+#   exp_data <- cbind(exp_data, CS)
+#   
+#   #inchikeys and case-study IDs
+#   inchi_CSID <- keep_df_cols(httk_exp_data,c('InChIKey','Code'))
+#   exp_data <- merge (exp_data, inchi_CSID,
+#                      by.y = 'Code' , by.x = 'CODE' , all.x = T)
+#   
+#   #Identify Casestudies and freq of occurrence of experimental data
+#   case_studies <- data.frame(table(httk_exp_data$CS))
+#   case_studies$CLint_Data <- 0
+#   case_studies$fu_Data <- 0
+#   case_studies$BP_Data <- 0
+#   
+#   for (i in 1:nrow(case_studies)){
+#     
+#     CS_indicies<-which(httk_exp_data$CS == case_studies[i,1])
+#     
+#     clint_data <- which(!is.na(httk_exp_data$CLint_value[CS_indicies]))
+#     case_studies[i,3] <- length(clint_data)
+#     
+#     fu_data <- which(!is.na(httk_exp_data$fu_value[CS_indicies]))
+#     case_studies[i,4] <- length(fu_data)
+#     
+#     bp_data <- which(!is.na(httk_exp_data$BP_value[CS_indicies]))
+#     case_studies[i,5] <- length(bp_data)
+#     
+#   }
+#   
+#   return(case_studies)
+#   
+# }

@@ -9,7 +9,7 @@ ACD_inputs <- function(info, not_found_chembl,episuite_data, missing_info = T){
     missing_HBD <- which(is.na(episuite_data$HBD))
     both_missing <- unique(c(missing_HBD,missing_PSA))
     
-    not_found_compounds<-NotFoundInEPI(not_found_chembl, episuite_data)
+    not_found_compounds<-NotFoundInsusdat(not_found_chembl, episuite_data)
     not_found_compounds$Status <- 'Missing Compound'
     #get inchi of missing compounds
     
@@ -27,7 +27,7 @@ ACD_inputs <- function(info, not_found_chembl,episuite_data, missing_info = T){
     
   } else {
     
-    missing_compounds <- NotFoundInEPI(not_found_chembl, episuite_data)
+    missing_compounds <- NotFoundInsusdat(not_found_chembl, episuite_data)
     missing_compounds$Status <- 'Missing Compound'
     missing_compounds <- missing_compounds %>% relocate(Status, .before = Code)
     

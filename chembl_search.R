@@ -1,6 +1,5 @@
 #load libraries of interest
 library(RSQLite)
-library(gmp)
 
 CHEMBLSearch <- function (data){
   
