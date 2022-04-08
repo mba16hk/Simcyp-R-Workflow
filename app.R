@@ -51,7 +51,7 @@ ui <- dashboardPage( skin = 'black',
                                 multiple = FALSE, #doesn't allow multi-file upload
                                 accept = c(".csv",".xlsx"),
                                 placeholder = 'test_compounds.xlsx'),
-                             "Ensure headers include: SMILES, INCHIKEY, CODE, COMPOUND, and CAS",
+                             "Ensure headers are: SMILES, INCHIKEY, CODE, and COMPOUND",
                              placement="bottom", trigger = "hover"),
 
                       #button to collect physiochemical information
@@ -87,7 +87,7 @@ ui <- dashboardPage( skin = 'black',
                                            buttonLabel=list(icon("folder"),"Browse"),
                                            accept = c(".xlsx"),
                                            placeholder = 'exp_data.xlsx'),
-                                 "Ensure headers include: CODE, BP, FU and CLINT",
+                                 "Ensure headers are: CODE, BP, FU and CLINT",
                                  placement="bottom", trigger = "hover"),
                           
                           #numeric input for different thresholds
@@ -116,6 +116,11 @@ ui <- dashboardPage( skin = 'black',
                                 width = 4
                               )
                             ),
+                            
+                            #see if the user wants to include compounds with missing information
+                            tipify(checkboxInput("exp_mean_flag", "Average inputs with httk", FALSE),
+                                   "Computed arithmetic mean of your input data and those from httk.",
+                                   placement="bottom", trigger = "hover"),
                             
                             #button to collect physiochemical information
                             tipify(actionButton("search_exp",
@@ -238,7 +243,7 @@ ui <- dashboardPage( skin = 'black',
         tabItem('run_simulation',
                 fluidRow(
                     #Parameters for simulation
-                    box(title = 'Set Additional Parameters',
+                    box(title = 'Simulation Parameters',
                         status = 'success',
                         height = 600,
                         #solidHeader = TRUE,
@@ -262,15 +267,33 @@ ui <- dashboardPage( skin = 'black',
                                                "mg" = "mg",
                                                "mg/m^2" = "mg/m^2"))),
                         
-                        selectInput('administration_route',
-                                    'Administration Route',
-                                    list("Oral" = "Oral",
-                                         "IV Bolus" = "IV Bolus")),
-                        
+                        #,
+                        p('Assumptions:'),
                         fluidRow(
                           
                           column(
-                            width = 3,
+                            width = 5,
+                            tipify(numericInput('acid_bp_ratio', 'Acid BP ratio', 0.55,
+                                         min = 0.55, max = NA),
+                                   "Acids without any BP ratio value are assumed to have this BP ratio",
+                                   placement="bottom", trigger = "hover")
+                          ),
+                          
+                          
+                          column(
+                            width = 5,
+                            tipify(numericInput('agp_threshold', 'pKa threshold for AGP binding to bases', 7,
+                                         min = 5.5, max = 8.5),
+                                   "Bases that have a pKa value higher than this threshold are assumed to bing to AGP",
+                                   placement="bottom", trigger = "hover")
+                          )
+                        ),
+                        
+                        p('Trial Design:'),
+                        fluidRow(
+                          
+                          column(
+                            width = 4,
                             numericInput('subjects', ' Subjects', 10,
                                          min = 1, max = NA, step = 1)
                           ),
@@ -282,31 +305,37 @@ ui <- dashboardPage( skin = 'black',
                           # ),
                           
                           column(
-                            width = 3,
+                            width = 4,
                             numericInput('sim_time', 'Duration', 24,
                                          min = 24, max = 240, step = 24)
                           ),
                           
                           column(
-                            width = 3,
-                            
-                            conditionalPanel(
-                              condition = "output.simulate_check",
-                              #Set some of simcyp's simulation parameters
-                              tipify(actionButton("simulate_button",
-                                                  label = "Simulate",
-                                                  icon = icon('laptop-code'),
-                                                  style = 'color: #fff;
+                            width = 4,
+                            selectInput('administration_route',
+                                        'Administration Route',
+                                        list("Oral" = "Oral",
+                                             "IV Bolus" = "IV Bolus",
+                                             "Dermal" = "Dermal"))
+                           
+                            )
+                        ),
+                        
+                        conditionalPanel(
+                          condition = "output.simulate_check",
+                          #Set some of simcyp's simulation parameters
+                          tipify(actionButton("simulate_button",
+                                              label = "Simulate",
+                                              icon = icon('laptop-code'),
+                                              style = 'color: #fff;
                                      background-color: #a44f2e; 
                                      border-color: #8a2b07'),#end of action button
-                                     "Simulate all compounds in the Simcyp Simulator.",
-                                     placement="top", trigger = "hover")
-                            )
-                            )
+                                 "Simulate all compounds in the Simcyp Simulator.",
+                                 placement="top", trigger = "hover")
                         ),
 
 
-                        width = 5) #end of box
+                        width = 9) #end of box
           
                   ),# end of fluidrow
                 
@@ -643,7 +672,8 @@ server <- function(input, output, session) {
                       experimental_data_directory = file2$datapath,
                       CL_threshold = input$CL_thresh,
                       BP_threshold = input$BP_thresh,
-                      fu_threshold = input$fu_thresh, mean_flag = 0)
+                      fu_threshold = input$fu_thresh, 
+                      mean_flag = input$exp_mean_flag)
     })
     
     #check if the experimental data is incorporated
@@ -690,8 +720,7 @@ server <- function(input, output, session) {
       OrganiseInputData(experimental_data(), Vss_method = input$pred_method,
                         Input_Dose = input$dose_value, UNITS = input$dose_units,
                         info = data(), admin_route = input$administration_route)
-      #print(hi)
-      #return(hi)
+
     })
     
     observe({

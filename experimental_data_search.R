@@ -4,7 +4,7 @@ ExpDataSearch <- function (httk_data, experimental_data_directory,
                            #set thresholds for parameters form experimental data
                            CL_threshold = 0, fu_threshold = 0, BP_threshold = 0,
                            #do NOT average user-provided experimental data and httk (turn to 1 to avergae values)
-                           mean_flag = 0) {
+                           mean_flag = FALSE) {
   
     
   #extract file extensions
@@ -96,8 +96,8 @@ ExpDataSearch <- function (httk_data, experimental_data_directory,
                                           'Experimental data',
                                           httk_exp_data$CLint_source)
   
-  #if mean_flag =0, the provided experimental data is preferred over httk
-  if (mean_flag == 1) {
+  #if mean_flag = FALSE, the provided experimental data is preferred over httk
+  if (mean_flag == TRUE) {
     
     
     #if there are two fu_values, averge them

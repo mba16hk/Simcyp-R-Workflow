@@ -40,12 +40,12 @@ OrganiseInputData <- function (httk_exp_data, info,
   # If the compound is from EPI Suite and it has a pKa (in acidic pKa which we merged there),
   # then if pKa <7 compound is acidic, if >7 compound is basic
   httk_exp_data$Compound.type <- ifelse(is.na(httk_exp_data$Compound.type) & 
-                                          httk_exp_data$data_source == 'EPI SUITE (EPA) - Experimental Data' & 
+                                          str_detect(httk_exp_data$data_source,'EPI SUITE (EPA)') & 
                                           !is.na(httk_exp_data$Acidic..pKa) & httk_exp_data$Acidic..pKa <7,
                                         'ACID', httk_exp_data$Compound.type)
   
   httk_exp_data$Compound.type <- ifelse(is.na(httk_exp_data$Compound.type) & 
-                                          httk_exp_data$data_source == 'EPI SUITE (EPA) - Experimental Data' & 
+                                          str_detect(httk_exp_data$data_source,'EPI SUITE (EPA)') & 
                                           !is.na(httk_exp_data$Acidic..pKa) & httk_exp_data$Acidic..pKa >7,
                                         'BASE', httk_exp_data$Compound.type)
   

@@ -1,7 +1,10 @@
 #load the httk library
 library(httk)
 
-httkSearch <- function (physchem_data, CAS_DTXSID, info){
+httkSearch <- function (physchem_data, CAS_DTXSID, info,
+                        
+                        #apply an operation on the collected fu and Clint values
+                        fu_operation = 'arithmetic mean', CLint_operation = 'arithmetic mean'){
   
   #------------ Obach2008 -------------------------------------
   
@@ -109,16 +112,44 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info){
   
   #-----------------process fu data------------------------------------
 
-  #find mean of the 3 fraction unbound values
-  httk_data$fu_avg <- rowMeans(data.frame(as.numeric(httk_data$fu.x),
-                                          as.numeric(httk_data$Human.Funbound.plasma.Point),
-                                          as.numeric(httk_data$fu.y)),
-                               na.rm = T)
+  #find mean/median of the 3 fraction unbound values
+  if (fu_operation == 'arithmetic mean'){
+    
+    httk_data$fu_res <- rowMeans(data.frame(as.numeric(httk_data$fu.x),
+                                            as.numeric(httk_data$Human.Funbound.plasma.Point),
+                                            as.numeric(httk_data$fu.y)),
+                                 na.rm = T)
+    
+  } else if (fu_operation == 'geometric mean'){
+    
+    df <- data.frame(as.numeric(httk_data$fu.x),
+                     as.numeric(httk_data$Human.Funbound.plasma.Point),
+                     as.numeric(httk_data$fu.y))
+    mean_log <- rowMeans(log(df), na.rm = T)
+    geom_mean <- exp(mean_log)
+    httk_data$fu_res <- geom_mean
+    
+  } else if (fu_operation == 'median'){
+    
+    df <- httk_data[,c('fu.x','fu.y','Human.Funbound.plasma.Point')]
+    
+    httk_data$fu_res <- apply(df, 1,function(x) median(as.numeric(x),na.rm = T) )
+    
+  } else{
+    
+    httk_data$fu_res <- rowMeans(data.frame(as.numeric(httk_data$fu.x),
+                                            as.numeric(httk_data$Human.Funbound.plasma.Point),
+                                            as.numeric(httk_data$fu.y)),
+                                 na.rm = T)
+    message('arithmetic mean applied. check the spelling of your input to the fu_operation argument')
+    
+  }
+  
 
   #remove unwanted columns and reorganise dataframe
   rm_cols <- c('fu.x','Human.Funbound.plasma.Point','fu.y')
   httk_data <- rm_df_cols(httk_data,rm_cols)
-  httk_data <- httk_data %>% relocate(fu_avg, .after = CAS)
+  httk_data <- httk_data %>% relocate(fu_res, .after = CAS)
   httk_data <- httk_data %>% relocate(DTXSID, .after = CAS)
   
   #organise sources for fraction unbound
@@ -144,7 +175,7 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info){
   httk_data$fu_units = "fraction"
   
   #organise the httk_data columns
-  httk_data <- httk_data %>% relocate(fu_units, .after = fu_avg)
+  httk_data <- httk_data %>% relocate(fu_units, .after = fu_res)
   httk_data <- httk_data %>% relocate(fu_source, .after = fu_units)
   
   #-----------------process Clint data------------------------------------
@@ -164,9 +195,31 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info){
   httk_data <- httk_data %>% relocate(CLint_iv, .after = CLint1)
   
   #find mean of the 2 CLint values
-  httk_data$CLint <- rowMeans(data.frame(as.numeric(httk_data$CLint1),
-                                          as.numeric(httk_data$CLint_iv)),
-                               na.rm = T)
+  if (CLint_operation == 'geometric mean'){
+    
+    df <- data.frame(as.numeric(httk_data$CLint1),
+                     as.numeric(httk_data$CLint_iv))
+    mean_log <- rowMeans(log(df), na.rm = T)
+    geom_mean <- exp(mean_log)
+    httk_data$CLint <- geom_mean
+
+    
+  } else if (CLint_operation == 'arithmetic mean'){
+    
+    
+    httk_data$CLint <- rowMeans(data.frame(as.numeric(httk_data$CLint1),
+                                           as.numeric(httk_data$CLint_iv)),
+                                na.rm = T)
+    
+  } else{
+    
+    httk_data$CLint <- rowMeans(data.frame(as.numeric(httk_data$CLint1),
+                                           as.numeric(httk_data$CLint_iv)),
+                                na.rm = T)
+    message('arithmetic mean applied. check the spelling of your input to the CLint_operation argument')
+  }
+  
+  
   httk_data$CLint <- suppressWarnings(as.numeric(httk_data$CLint))
   
   #set the units for CLint
@@ -204,7 +257,7 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info){
   httk_data <- httk_data %>% relocate(CLint_units, .after = CLint)
   httk_data <- httk_data %>% relocate(CLint_source, .after = CLint_units)
   httk_data <- httk_data %>% rename(CLint_value = CLint)
-  httk_data <- httk_data %>% rename(fu_value = fu_avg)
+  httk_data <- httk_data %>% rename(fu_value = fu_res)
   httk_data <- httk_data %>% rename(BP_value = BP)
   
   #merge the data collected from httk with the CAS rn and InchiKeys
