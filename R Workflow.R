@@ -271,8 +271,15 @@ SimcypSimulation <- function (organised_data, trials = 1, subjects, Time){
     
   } else if (organised_data$Route[1] == 'IV Bolus'){
     
+    #infused for a duration of 30 seconds
     bolus_wkspace_indicies <- str_detect(SimcypWksz,'Bolus')
     SimcypWksz = SimcypWksz[bolus_wkspace_indicies]
+    
+  } else if (organised_data$Route[1] == 'Dermal'){
+    
+    #applied to an area of 60 cm^2
+    dermal_wkspace_indicies <- str_detect(SimcypWksz,'Dermal')
+    SimcypWksz = SimcypWksz[dermal_wkspace_indicies]
     
   }
   
