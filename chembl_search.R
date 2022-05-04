@@ -38,7 +38,7 @@ CHEMBLSearch <- function (data){
   return(ChEMBL_search)
 }
 
-CompoundsNotFound <- function (data, chembl_file){
+NotInChEMBL<- function (data, chembl_file){
   
   ## report compounds not found based on InChiKey search
   NOT_FOUND <- filter(data, !(data$InChiKey %in% chembl_file$InChIKey))

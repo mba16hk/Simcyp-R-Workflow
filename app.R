@@ -10,17 +10,17 @@ setwd(dirname(rstudioapi::getSourceEditorContext()$path))
 #import the scripts 
 source('input_query.R')
 source('chembl_search.R')
-#source('EPI_search.R')
 source('susdat_search.R')
 source('ACD_Labs.R')
 source('httk_search.R')
 source('experimental_data_search.R')
 source('organise_simulation_data.R')
+source('Additional_data.R')
 source('R Workflow.R')
 source('PredictParams.R')
 
 ui <- dashboardPage( skin = 'black',
-    dashboardHeader(title = "Simcyp-R Workflow"),
+    dashboardHeader(title = "SimRFlow"),
     dashboardSidebar(
       sidebarMenu(menuItem('Data Collection', 
                            tabName = 'data_collection',
@@ -136,7 +136,7 @@ ui <- dashboardPage( skin = 'black',
                       ),
                       
                       width = 3,
-                      height = 600),#end of box
+                      height = "20em"),#end of box
                   
 
                   conditionalPanel(
@@ -171,7 +171,7 @@ ui <- dashboardPage( skin = 'black',
                                                     icon = icon('table'),
                                                     style = 'color: #fff; 
                            background-color: #a44f2e; border-color: #8a2b07')),
-                      height = "250px",
+                      height = "20em",
                       status = 'danger',
                       solidHeader = T,
                       width = 9,
@@ -200,7 +200,7 @@ ui <- dashboardPage( skin = 'black',
                                     width = 12)),
                     
                     #Visualise the physiochemical Data
-                    tabPanel("Physchem Data + ACD", 
+                    tabPanel("Physchem Data + Further Data", 
                             column(dataTableOutput("TBL7"), 
                                     height = "250px",
                                     width = 12)),
@@ -550,7 +550,7 @@ server <- function(input, output, session) {
     
     not_found_in_chembl <- eventReactive(input$search_physchem,{
         #extract the compounds not found in chembl
-        CompoundsNotFound(data(), chembl_data())
+        NotInChEMBL(data(), chembl_data())
     })
     
     
@@ -857,42 +857,3 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui = ui, server = server)
-
-# timelineBlock(
-#   reversed = FALSE,
-#   width = 12,
-#   timelineEnd(color = "red"),
-#   timelineLabel(2018, color = "teal"),
-#   timelineItem(
-#     title = "Item 1",
-#     color = "olive",
-#     time = "now",
-#     footer = "Here is the footer",
-#     "This is the body"
-#   ),
-#   timelineItem(
-#     title = "Item 2",
-#     border = FALSE
-#   ),
-#   timelineLabel(2015, color = "orange"),
-#   timelineItem(
-#     title = "Item 3",
-#     icon = icon("paint-brush"),
-#     color = "maroon",
-#     timelineItemMedia(image = "https://placehold.it/150x100"),
-#     timelineItemMedia(image = "https://placehold.it/150x100")
-#   ),
-#   timelineStart(color = "purple")
-# ),
-
-# p("p creates a paragraph of text."),
-# p("A new p() command starts a new paragraph. Supply a style attribute to change the format of the entire paragraph.", style = "font-family: 'times'; font-si16pt"),
-# strong("strong() makes bold text."),
-# em("em() creates italicized (i.e, emphasized) text."),
-# br(),
-# code("code displays your text similar to computer code"),
-# div("div creates segments of text with a similar style. This division of text is all blue because I passed the argument 'style = color:blue' to div", style = "color:blue"),
-# br(),
-# p("span does the same thing as div, but it works with",
-#   span("groups of words", style = "color:blue"),
-#   "that appear inside a paragraph.")
