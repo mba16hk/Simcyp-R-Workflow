@@ -1,4 +1,4 @@
-# Simcyp-R-Workflow
+# SimRFlow
 A high throughput workflow comprising data collection and simulation of compounds using Certara's Simcyp Simulator.
 
 # The following is an example use of SimRFlow functions
