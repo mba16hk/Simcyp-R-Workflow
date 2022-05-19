@@ -45,7 +45,7 @@ InChIKey_search  <- function(filenamedb,query)
   ChEMBLDB <- dbConnect(dbDriver("SQLite"), dbname = filenamedb)
   
   ## identify molregno and canonical SMILES string in ChEMBLdb based on standard InChIkey
-  InChiKey <- dbSendQuery(conn = ChEMBLDB, "SELECT molregno, standard_Inchi_key, canonical_smiles FROM compound_structures WHERE standard_InchI_key = ?")
+  InChiKey <- dbSendQuery(conn = ChEMBLDB, "SELECT molregno, standard_Inchi_key, standard_inchi, canonical_smiles FROM compound_structures WHERE standard_InchI_key = ?")
   dbBind(InChiKey, list(query))
   STRUCTURES <- data.frame(dbFetch(InChiKey))
   dbClearResult(InChiKey)
@@ -69,7 +69,7 @@ InChIKey_search  <- function(filenamedb,query)
   
   ## use the full vs freebase MW to check what is returned from search
   
-  X <- c("Molregno","COMPOUND NAME", "ChEMBL ID", "InChIKey", "SMILES", "MWfreebase", "MW", 
+  X <- c("Molregno","COMPOUND NAME", "ChEMBL ID", "InChIKey","Standard Inchi" ,"SMILES", "MWfreebase", "MW", 
          "logPow", 'logD',"Compound type","Acidic  pKa", "Basic pKa", "PSA", "HBD", "Molecular_Formula")
   colnames(results) <- X
   
@@ -100,249 +100,6 @@ calculate.logD<-function(logP, pKa){
   return(logD)
 }
 
-#Extract useful information from compound databases
-extract_info <- function(info_to_extract){
-  
-  require(Simcyp)
-  
-  #find the number of simulated individuals
-  individuals<- length(unique(GetAllIndividualValues_DB(IndividualValueID$IndividualNo,info_to_extract)))
-  
-  #extract AUC parameters for all individuals
-  AUC_data<-c()
-  for (i in 1:individuals){
-    dat<-GetAUCFrom_DB(ProfileID$Csys,CompoundID$Substrate,individual = i,info_to_extract)
-    AUC_data <- rbind(AUC_data,dat)
-  }
-  
-  #Extract information from dB
-  BSA<- GetAllIndividualValues_DB(IndividualValueID$BSA,info_to_extract)# BSA (m^2)
-  Age<- GetAllIndividualValues_DB(IndividualValueID$Age,info_to_extract)# Age (years)
-  BW<- GetAllIndividualValues_DB(IndividualValueID$BW,info_to_extract)# BW (kg)
-  GFR<- GetAllIndividualValues_DB(IndividualValueID$GFR,info_to_extract) #mL/min/1.73m^2
-  
-  #predicted values
-  Vss<- GetAllCompoundResults_DB('idPredictedVss',compound = CompoundID$Substrate ,info_to_extract) #L/kg
-  Fg<- GetAllCompoundResults_DB('idfGut', compound = CompoundID$Substrate,info_to_extract)
-  Fh<- GetAllCompoundResults_DB('idfLiver', compound = CompoundID$Substrate,info_to_extract)
-  Fa<- GetAllCompoundResults_DB('idfaAdj',compound = CompoundID$Substrate, info_to_extract)
-  Fu_plasma <- GetAllCompoundResults_DB('idfuAdj', compound = CompoundID$Substrate, info_to_extract)
-  Ka<- GetAllCompoundResults_DB('idkaAdj',compound = CompoundID$Substrate, info_to_extract) #absorption rate constant (1/h)
-  BP <- GetAllCompoundResults_DB('idbpAdj', compound = CompoundID$Substrate, info_to_extract) # BP ratio
-  
-  data_from_dB<-cbind(AUC_data,BSA,Age,BW,GFR,Vss,Fg,Fh,Fa,Fu_plasma,Ka,BP)
-  
-  rmv <- c('ProfileIndex','Inhibition','DiffStoreIndex','Dose',
-           'StartTime','EndTime','Tmin','Cmin', 'AUCt_full',
-           'Cfirst', 'Clast','LambdaZ')
-  
-  data_from_dB<- rm_df_cols(data_from_dB,rmv)
-  
-  return(data_from_dB)
-}
-
-# Function from plotting conc-time profiles for each compound
-plot_profile <- function(casestudy_ID, Output, units = 'ng/mL', curated_data, logy=F){
-  
-  require(ggplot2)
-  require(scales)
-  
-  #extract a df for the CSID
-  indicies<-which(Output$Group == casestudy_ID)
-  df <- Output[indicies,2:ncol(Output)]
-  
-  #if more than 30 individuals are simulated, only select 30 at random
-  if (ncol(df)>31){
-    randomly_selected_cols <- sample(2:ncol(df), 2, replace=F)
-    df<-df[,c(1,randomly_selected_cols)]
-  }
-  
-  #convert dataframe into long form
-  df<- long_form(df)
-  colnames(df)<-c('Sub','Times','Conc')
-  
-  #Create Title for plot
-  header<-paste(casestudy_ID,'Concentration-Time Profiles',sep=' ')
-  
-  if (units == 'ng/mL'){
-    
-    df <- df
-    #mean_profile$Concentration <- mean_profile$Concentration
-    ytitle <- paste('Concentration',paste0('(',units,')'), sep=' ')
-    
-  } else if (units == 'uM'){
-    
-    #Extract MW from curated data
-    df_curated_data <- curated_data[which(curated_data$Code == casestudy_ID),]
-    MW <- df_curated_data$MW
-    
-    ## convert units of cmax from mg/L -> uM #check again
-    df$Conc <- (df$Conc/1000)/MW*1e6
-    ytitle <- paste('Concentration',paste0('(',units,')'), sep=' ')
-    
-  } else{
-    
-    message('Please select either ng/mL or uM. ng/mL used as default')
-    ytitle <- paste('Concentration (ng/mL)', sep=' ')
-  }
-  
-  if (logy == T){
-    
-    #Plot the mean profile (y axis normal scale)
-    g1 <- ggplot(df, aes(x = Times, y = Conc, group = factor(Sub))) + geom_line(aes(color=factor(Sub)), size = 1.5, linetype = 1)
-    g1 <- g1 + geom_line() 
-    g1 <- g1 + xlab("Time (hours)") + ylab(ytitle)
-    g1 <- g1 + ggtitle(header) + 
-      labs(color  = "Subjects", linetype = 1)+ theme(
-        plot.background = element_rect(fill = "white", colour = NA),
-        panel.background = element_rect(fill = "white", colour = NA),
-        axis.line.x = element_line(color="black", size = 1),
-        axis.line.y = element_line(color="black", size = 1),
-        panel.grid.major = element_line(color = "grey"),
-        panel.grid.minor = element_line(color = "grey"),
-        axis.text = element_text(colour = "black",size=12),
-        axis.title = element_text(colour = "black",size=14,face="bold")
-    )
-    
-    g1 + scale_y_continuous(trans='log10')
-    
-    #determine the breaks
-    
-    #start by determining the maximum value of the y axis
-    # max_val <- roundUp(max(df$Conc))
-    # 
-    # #is the maximum value is more than 2x larger than the 
-    # #actual maximum value, reduce the maximum value by half
-    # if (max(df$Conc)<(0.5*max_val)){
-    #   max_val <- 0.5* max_val
-    #   max_val2<-roundDown(max_val)
-    #   break_set1<-c(max_val2,max_val2/10,max_val2/100,max_val2/1000)
-    #   break_set2<-c(max_val, break_set1[1:2]/2)
-    # } else{
-    #   break_set1<-c(max_val,max_val/10,max_val/100,max_val/1000)
-    #   break_set2<-break_set1[1:3]/2
-    # }
-    # g1 +  scale_y_continuous(trans = scales::pseudo_log_trans(base = 10),
-    #                          breaks=c(0, break_set1, break_set2))
-    
-    
-   
-  } else {
-    
-    #Plot the mean profile (y axis normal scale)
-    g1 <- ggplot(df, aes(x = Times, y = Conc, group = factor(Sub))) + geom_line(aes(color=factor(Sub)), size = 1, linetype = 1) 
-    g1 <- g1 + xlab("Time (hours)") + ylab(ytitle)
-    g1 + ggtitle(header) + 
-      labs(color  = "Subjects", linetype = 1)+ theme(
-      plot.background = element_rect(fill = "white", colour = NA),
-      panel.background = element_rect(fill = "white", colour = NA),
-      axis.line.x = element_line(color="black", size = 1),
-      axis.line.y = element_line(color="black", size = 1),
-      panel.grid.major = element_line(color = "grey"),
-      panel.grid.minor = element_line(color = "grey"),
-      axis.text = element_text(colour = "black",size=12),
-      axis.title = element_text(colour = "black",size=14,face="bold")
-    )
-  }
-  
-}
-
-plot_parameters<-function(simcyp_outputs, Compound, 
-                          plot_type = 'Distribution', x_variable, y_variable,
-                          chosen_col){
-  require(ggplot2)
-  #Extract data relationg to compound of interest
-  compound_IDs<- names(simcyp_outputs)
-  index <- which(Compound==compound_IDs)
-  outputs<- simcyp_outputs[[index]]
-  
-  #determine x and y variables
-  x_col<- which(colnames(outputs)==x_variable)
-  y_col <- which(colnames(outputs)== y_variable)
-  
-  x_axis_label <- paste(x_variable,determine_units(x_variable), sep=' ')
-  
-  if (plot_type == 'Distribution'){
-    #Create Title for plot
-    header<-paste(Compound,'Distribution of', x_variable, sep=' ')
-    
-    # Distributions are plotted as density plots (only x variable is considered)
-    ggplot(outputs, aes(x=outputs[,x_col], colour= chosen_col, fill = chosen_col)) +
-      geom_density(alpha=0.4)+ ggtitle(header)+ xlab(x_axis_label)+
-      scale_color_manual(values= chosen_col) +
-      scale_fill_manual(values= chosen_col) +
-      theme(legend.position = "None",
-            plot.background = element_rect(fill = "white", colour = NA),
-            panel.background = element_rect(fill = "white", colour = NA),
-            axis.line.x = element_line(color="black", size = 1),
-            axis.line.y = element_line(color="black", size = 1),
-            panel.grid.major = element_line(color = "grey"),
-            panel.grid.minor = element_line(color = "grey"),
-            axis.text = element_text(colour = "black",size=12),
-            axis.title = element_text(colour = "black",size=14,face="bold"))
-    
-  } else if (plot_type == 'Relationship'){
-    
-    #create y axis label
-    y_axis_label <- paste(y_variable, determine_units(y_variable), sep=' ')
-    
-    #find the correlation coefficient
-    cor_coeff<- round(cor(outputs[,x_col],outputs[,y_col]),2)
-    
-    #Create Title for plot
-    header<-paste(Compound,' Relationship between ', x_variable,' and ', y_variable,' (r = ',cor_coeff,')' ,sep='')
-    
-    #relationships are scatter diagrams where x and y variables are needed
-    g1 <- ggplot(outputs, aes(x = outputs[,x_col], y = outputs[,y_col]))
-    g1 <- g1 + geom_point(colour = chosen_col) + geom_smooth(method = "lm", se = FALSE, colour = chosen_col)  
-    g1 <- g1 + xlab(x_axis_label) + ylab(y_axis_label)
-    g1 + ggtitle(header) + theme(
-      plot.background = element_rect(fill = "white", colour = NA),
-      panel.background = element_rect(fill = "white", colour = NA),
-      axis.line.x = element_line(color="black", size = 1),
-      axis.line.y = element_line(color="black", size = 1),
-      panel.grid.major = element_line(color = "grey"),
-      panel.grid.minor = element_line(color = "grey"),
-      axis.text = element_text(colour = "black",size=12),
-      axis.title = element_text(colour = "black",size=14,face="bold")
-    )
-  }
-  
-}
-
-#cross-compound comparison plot
-compare_simulated_compound <- function(summary_simcyp, parameter, bar_order, bar_col){
-  
-  compound_codes<-summary_simcyp$CS_code
-  parameters_to_plot <- keep_df_cols(summary_simcyp,parameter)
-  
-  df<-data.frame(compound_codes,parameters_to_plot)
-  colnames(df)<-c('Compounds','parameter')
-  
-  if(bar_order=='ascending'){
-    df <- df[order(df$parameter),]
-    
-  } else if (bar_order == 'compound_code'){
-    df <- df[order(df$Compounds),]
-  }
-  
-  header<-paste('Mean',parameter,'Variation Across Simulated Compounds',sep=' ')
-  
-  ggplot(df, aes(x=Compounds, y= parameter)) +
-    ylab(parameter)+
-    geom_bar(stat="identity", colour = bar_col, fill = bar_col)+
-    ggtitle(header)+ 
-    scale_x_discrete(limits = df$Compounds) +
-                       theme(
-      plot.background = element_rect(fill = "white", colour = NA),
-      panel.background = element_rect(fill = "white", colour = NA),
-      axis.line.x = element_line(color="black", size = 1),
-      axis.line.y = element_line(color="black", size = 1),
-      panel.grid.major = element_line(color = "grey"),
-      panel.grid.minor = element_line(color = "grey"),
-      axis.text = element_text(colour = "black",size=12),
-      axis.title = element_text(colour = "black",size=14,face="bold"))
-}
 
 #function to check if all columns are present
 check_columns<- function(data){
@@ -442,6 +199,15 @@ extract_column <- function (df, column_index){
   return(df[,column_index])
 }
 
+#function to extract tissue types
+extract_tissue <- function (df){
+  
+  #extract everything after the first underscore
+  names <- unique(sub("^[^_]*_", "", colnames(df)))
+  names <- names[!names %in% c('Group','Times')]
+  return(names)
+}
+
 #function to convert wide matrices (dataframes) into long form
 long_form <- function (df){
   
@@ -458,31 +224,6 @@ long_form <- function (df){
   return(long_data)
 }
 
-Set_SimDuration <- function(Time) {   # Note this function works only for duration entered as 24 hour increments. 
-  
-  # Set End Day 
-  EndDay<- (Time/24)+1
-  SetParameter(SimulationParameterID$EndDay,CategoryID$SimulationData, CompoundID$Substrate, as.integer(EndDay))
-  #message(paste('Setting End day to ',EndDay  , sep= ' '))
-  
-  # Set number of doses
-  NumDose<- (EndDay-1)*2
-  SetParameter(SimulationParameterID$CmpNumDoses1,CategoryID$SimulationData, CompoundID$Substrate, as.integer(NumDose))  # Number dose 2 idNumberDoses2
-  SetParameter(SimulationParameterID$CmpNumDoses2,CategoryID$SimulationData, CompoundID$Substrate, as.integer(NumDose))  # Number dose 3 idNumberDoses3
-  SetParameter(SimulationParameterID$CmpNumDoses3,CategoryID$SimulationData, CompoundID$Substrate, as.integer(NumDose))  # Number dose 4 idNumberDoses
-  #message(paste('Setting number doses to ', NumDose , sep= ' '))
-  
-  Button<-  if (EndDay<= 2){
-    
-    SetParameter(SimulationParameterID$VariablePop,CategoryID$SimulationData, CompoundID$Substrate, FALSE)
-    #message(paste('Setting Size button to False', sep= ' '))  
-  } else {
-    
-    SetParameter(SimulationParameterID$VariablePop,CategoryID$SimulationData, CompoundID$Substrate, TRUE)
-    #message(paste('Setting Size button to True', sep= ' ')) 
-  }
-  
-}
 
 #function to determine if cols in df match with cols of a different dataframe
 match.df <- function(df1, df2, colnames_to_match){
@@ -507,7 +248,7 @@ match.df <- function(df1, df2, colnames_to_match){
   #create a empty vector
   matched_mismatched <- rep(NA, nrow(df1))
   
-  #populate with binary values (T for natched, F for mismatch)
+  #populate with binary values (T for matched, F for mismatch)
   matched_mismatched[matches]<- TRUE
   matched_mismatched[mismatches]<- FALSE
   
