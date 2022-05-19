@@ -18,6 +18,7 @@ source('organise_simulation_data.R')
 source('Additional_data.R')
 source('R Workflow.R')
 source('PredictParams.R')
+source('plotting_functions.R')
 
 ui <- dashboardPage( skin = 'black',
     dashboardHeader(title = "SimRFlow"),
@@ -76,16 +77,16 @@ ui <- dashboardPage( skin = 'black',
                                               icon = icon('search'),
                                               style = 'color: #fff; 
                            background-color: #a44f2e; border-color: #8a2b07'),
-                                 "Searches HTTK database for any experimental data.",
+                                 "Searches 3 HTTK databases for any experimental data.",
                                  placement="bottom", trigger = "hover")
                         ),
                         
                         conditionalPanel(
                           condition = "input.include_exp_data > 0",
-                          tipify(fileInput("file2", "XLSX Experimental Data File",
+                          tipify(fileInput("file2", "CSV/XLSX Experimental Data File",
                                            multiple = FALSE,
                                            buttonLabel=list(icon("folder"),"Browse"),
-                                           accept = c(".xlsx"),
+                                           accept = c(".xlsx",".csv"),
                                            placeholder = 'exp_data.xlsx'),
                                  "Ensure headers are: CODE, BP, FU and CLINT",
                                  placement="bottom", trigger = "hover"),
@@ -153,7 +154,7 @@ ui <- dashboardPage( skin = 'black',
                       dataTableOutput("TBL6"),
                       
                       #some information for the user
-                      p("The CSV file can be optionally imported into ACD labs to search 
+                      p("Idea: The CSV file can be optionally imported into ACD/Labs
                         for additional physiochemical data. You may proceed without uploading ACD data."),
                       
                       #check if the user would like to upload information they manually collected from ACD labs
@@ -307,7 +308,7 @@ ui <- dashboardPage( skin = 'black',
                           column(
                             width = 4,
                             numericInput('sim_time', 'Duration', 24,
-                                         min = 24, max = 240, step = 24)
+                                         min = 4, max = 480, step = 0.5)
                           ),
                           
                           column(
@@ -347,7 +348,7 @@ ui <- dashboardPage( skin = 'black',
                     
                     #visualise simcyp outputs table
                     tabPanel('Concentration-Time Profiles',
-                             'The concentration time profiles of all simulated compounds and their corresponding subjects:',
+                             'The concentration time profiles of all simulated compounds and their corresponding subjects in different tissues:',
                              column(dataTableOutput("TBL4"),
                                     width = 12)),
                     
@@ -368,6 +369,9 @@ ui <- dashboardPage( skin = 'black',
                   
                   #Enter the compound code  
                   uiOutput("compound_lists"),
+                  
+                  #Enter the tissue type 
+                  uiOutput("tissue_lists"),
                   
                   #Select Log Scale or Normal Scale
                   radioButtons('log_scale','y-axis scale', 
@@ -403,8 +407,8 @@ ui <- dashboardPage( skin = 'black',
                   
                   #select x axis
                   selectInput('x_axis_var', 'x Variable',
-                              choices = list('Tmax'= 'Tmax',
-                                             'Cmax'='Cmax',
+                              choices = list('Plasma Tmax'= 'Tmax',
+                                             'Plasma Cmax'='Cmax_PLASMA',
                                              'AUC'= 'AUC',
                                              'AUCinf'= 'AUCinf',
                                              'Half Life' = 'HalfLife',
@@ -416,15 +420,26 @@ ui <- dashboardPage( skin = 'black',
                                              'Volume of Distribution'='Vss',
                                              'Fraction Absorbed'='Fa',
                                              'Fraction unbound in plasma'= 'Fu_plasma',
-                                             'Ka'='Ka')),
+                                             'Ka'='Ka',
+                                             'Skin Cmax' = 'Cmax_SKIN',
+                                             'Kidney Cmax' =  'Cmax_KIDNEY',
+                                             'Brain Cmax' = 'Cmax_BRAIN',
+                                             'Heart Cmax' = 'Cmax_HEART',
+                                             'Gut Cmax' = 'Cmax_GUT',
+                                             'Lung Cmax' = 'Cmax_LUNG',
+                                             'Liver Cmax' = 'Cmax_LIVER',
+                                             'Pancreas Cmax' = 'Cmax_PANCREAS',
+                                             'Spleen Cmax' = 'Cmax_SPLEEN',
+                                             'Muscle Cmax' = 'Cmax_MUSCLE',
+                                             'Adipose Cmax' = 'Cmax_ADIPOSE')),
                   
                   #Only display y axis option if we are plotting a relationship
                   conditionalPanel(
                     condition = "input.plot_type == 'Relationship'",
                     #select y axis
                     selectInput('y_axis_var', 'y Variable',
-                                choices = list('Tmax'= 'Tmax',
-                                               'Cmax'='Cmax',
+                                choices = list('Plasma Tmax'= 'Tmax',
+                                               'Plasma Cmax'='Cmax_PLASMA',
                                                'AUC'= 'AUC',
                                                'AUCinf'= 'AUCinf',
                                                'Half Life' = 'HalfLife',
@@ -436,7 +451,18 @@ ui <- dashboardPage( skin = 'black',
                                                'Volume of Distribution'='Vss',
                                                'Fraction Absorbed'='Fa',
                                                'Fraction unbound in plasma'= 'Fu_plasma',
-                                               'Ka'='Ka'))
+                                               'Ka'='Ka',
+                                               'Skin Cmax' = 'Cmax_SKIN',
+                                               'Kidney Cmax' =  'Cmax_KIDNEY',
+                                               'Brain Cmax' = 'Cmax_BRAIN',
+                                               'Heart Cmax' = 'Cmax_HEART',
+                                               'Gut Cmax' = 'Cmax_GUT',
+                                               'Lung Cmax' = 'Cmax_LUNG',
+                                               'Liver Cmax' = 'Cmax_LIVER',
+                                               'Pancreas Cmax' = 'Cmax_PANCREAS',
+                                               'Spleen Cmax' = 'Cmax_SPLEEN',
+                                               'Muscle Cmax' = 'Cmax_MUSCLE',
+                                               'Adipose Cmax' = 'Cmax_ADIPOSE'))
                   ), #end of conditional panel
                   
                   #select plot colour
@@ -460,8 +486,8 @@ ui <- dashboardPage( skin = 'black',
                   
                   # Parameters
                   selectInput('sim_parameters', 'Simulated Parameters',
-                              choices = list('Tmax'= 'Tmax',
-                                             'Cmax'='Cmax',
+                              choices = list('Plasma Tmax'= 'Tmax',
+                                             'Plasma Cmax'='Cmax_PLASMA',
                                              'AUC'= 'AUC',
                                              'AUCinf'= 'AUCinf',
                                              'Half Life' = 'HalfLife',
@@ -469,7 +495,18 @@ ui <- dashboardPage( skin = 'black',
                                              'Volume of Distribution'='Vss',
                                              'Fraction Absorbed'='Fa',
                                              'Fraction unbound in plasma'= 'Fu_plasma',
-                                             'Ka'='Ka')),
+                                             'Ka'='Ka',
+                                             'Skin Cmax' = 'Cmax_SKIN',
+                                             'Kidney Cmax' =  'Cmax_KIDNEY',
+                                             'Brain Cmax' = 'Cmax_BRAIN',
+                                             'Heart Cmax' = 'Cmax_HEART',
+                                             'Gut Cmax' = 'Cmax_GUT',
+                                             'Lung Cmax' = 'Cmax_LUNG',
+                                             'Liver Cmax' = 'Cmax_LIVER',
+                                             'Pancreas Cmax' = 'Cmax_PANCREAS',
+                                             'Spleen Cmax' = 'Cmax_SPLEEN',
+                                             'Muscle Cmax' = 'Cmax_MUSCLE',
+                                             'Adipose Cmax' = 'Cmax_ADIPOSE')),
                   
                   #Select x axis orders
                   radioButtons('param_order','x-axis ordering', 
@@ -522,7 +559,7 @@ server <- function(input, output, session) {
                    icon = icon('atom'),
                    style = 'color: #fff; 
                    background-color: #a44f2e; border-color: #8a2b07'),
-             'Searches the ChEMBL and EPI Suite for physiochemical data',
+             'Searches ChEMBL and SusDat for physiochemical data',
              placement="bottom", trigger = "hover")
     })
     
@@ -723,10 +760,6 @@ server <- function(input, output, session) {
 
     })
     
-    observe({
-      org_data <<- organised_data()
-    })
-    
     predicted_variables <- eventReactive(input$predict_params_button,{
       #Get predicted for fu, BP, Vss and Kd
       PredictParameters(organised_data())
@@ -752,7 +785,11 @@ server <- function(input, output, session) {
     output_profiles <- eventReactive(input$simulate_button, {
       #Run the simulations through Simcyp
       SimcypSimulation(organised_data(), subjects = input$subjects, #,trials = input$trials
-                       Time = input$sim_time)
+                       Time = as.numeric(input$sim_time))
+    })
+    
+    observe({
+      obs_data <<- output_profiles()
     })
     
     simcyp_outputs <- eventReactive(input$simulate_button, {
@@ -765,6 +802,7 @@ server <- function(input, output, session) {
       suppressWarnings(SummaryOutputs(simcyp_outputs()))
     })
     
+    #generate the compound codes after hitting the simulate button
     compound_codes <- eventReactive(input$simulate_button, {
       
       #identify the compound codes
@@ -775,6 +813,20 @@ server <- function(input, output, session) {
       names(compound_codes_list)<-codes
       
       return(compound_codes_list)
+      
+    })
+    
+    #generate the tissue types after hitting the simulate button
+    tissue_types <- eventReactive(input$simulate_button, {
+      
+      #identify the compound codes
+      tissues<- extract_tissue(output_profiles())
+      
+      #convert tissues to a list
+      tissue_list<-as.list(tissues)
+      names(tissue_list)<- tissues
+      
+      return(tissue_list)
       
     })
     
@@ -826,8 +878,14 @@ server <- function(input, output, session) {
                   choices = compound_codes())
     })
     
+    output$tissue_lists<- renderUI({
+      #generate drop_down lists of compound codes
+      selectInput('tissue', 'Tissue Type',
+                  choices = tissue_types(), selected = 'PLASMA')
+    })
+    
     output$conc_time_plot <- renderPlot({
-      plot_profile(input$comp_code, output_profiles(),
+      plot_profile(input$comp_code, output_profiles(), tissue_type = input$tissue,
            units=input$unit, curated_data = experimental_data(), 
            logy = input$log_scale)
     })
