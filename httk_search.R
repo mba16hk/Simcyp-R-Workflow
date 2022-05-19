@@ -6,11 +6,17 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
                         #apply an operation on the collected fu and Clint values
                         fu_operation = 'arithmetic mean', CLint_operation = 'arithmetic mean'){
   
+  if (nrow(CAS_DTXSID) == 0) {
+    return(message('no data from httk can be found for any of the compounds'))
+  }
+  
   #------------ Obach2008 -------------------------------------
   
   #Start by searching Obach for Clint & fu using CAS numbers
   Obach_data<-filter(Obach2008, Obach2008$CAS %in% CAS_DTXSID$CAS)
-  Obach_data$Obach2008_source <- 'Obach 2008'
+  if (nrow(Obach_data)>0){
+    Obach_data$Obach2008_source <- 'Obach 2008'
+  }
   keep<- c('CAS','fu','CL (mL/min/kg)','Obach2008_source')
   Obach_data <- keep_df_cols(Obach_data,keep)
   
@@ -18,7 +24,9 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   
   #next is wambaugh 2019 database which contains clint, fu, logP, pKa using CAS
   wambaugh2019_data<-filter(wambaugh2019, wambaugh2019$CAS %in% CAS_DTXSID$CAS)
-  wambaugh2019_data$wambaugh2019_source <- 'wambaugh2019'
+  if (nrow(wambaugh2019_data)>0){
+    wambaugh2019_data$wambaugh2019_source <- 'wambaugh2019'
+  }
   keep<- c('CAS','Human.Clint.Point','Human.Funbound.plasma.Point',
            'DSSTox_Substance_Id','wambaugh2019_source')
   wambaugh2019_data <- keep_df_cols(wambaugh2019_data,keep)
@@ -108,8 +116,6 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   httk_data_1 <- merge(Obach_data,wambaugh2019_data,by='CAS',all = T)
   httk_data <- merge(httk_data_1,human_in_vitro, by = 'CAS', all = T)
   
-  rm(in_vitro_data,Obach_data,wambaugh2019_data)
-  
   #-----------------process fu data------------------------------------
 
   #find mean/median of the 3 fraction unbound values
@@ -135,6 +141,10 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
     
     httk_data$fu_res <- apply(df, 1,function(x) median(as.numeric(x),na.rm = T) )
     
+  } else if (fu_operation == 'None'){
+    
+    httk_data$fu_res <- apply(httk_data[,c('fu.x','fu.y','Human.Funbound.plasma.Point')],1,function(x) paste0(x[!is.na(x)], collapse = ' & '))
+    
   } else{
     
     httk_data$fu_res <- rowMeans(data.frame(as.numeric(httk_data$fu.x),
@@ -146,18 +156,17 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   }
   
 
-  #remove unwanted columns and reorganise dataframe
-  rm_cols <- c('fu.x','Human.Funbound.plasma.Point','fu.y')
-  httk_data <- rm_df_cols(httk_data,rm_cols)
+  #reorganise dataframe
   httk_data <- httk_data %>% relocate(fu_res, .after = CAS)
   httk_data <- httk_data %>% relocate(DTXSID, .after = CAS)
   
   #organise sources for fraction unbound
-  fu_sources <- apply(httk_data[,c('Obach2008_source','wambaugh2019_source')], 1, 
-                      function(x) paste(x[!is.na(x)], collapse = " & "))
-  
-  httk_data$fu_source <- fu_sources
-  httk_data$fu_source <- ifelse(httk_data$fu_source=='',NA,httk_data$fu_source)
+  if (nrow(Obach_data) >0 & nrow(wambaugh2019_data) >0){
+    fu_sources <- apply(httk_data[,c('Obach2008_source','wambaugh2019_source')], 1, 
+                        function(x) paste(x[!is.na(x)], collapse = " & "))
+    httk_data$fu_source <- fu_sources
+    httk_data$fu_source <- ifelse(httk_data$fu_source=='',NA,httk_data$fu_source)
+  }
   
   #check if any of the sources haven't been included
   httk_data$fu_source <- ifelse(is.na(httk_data$fu_source) & !is.na(httk_data$fu_source_iv),
@@ -169,7 +178,8 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   httk_data$fu_source <- ifelse(!is.na(httk_data$fu_source), paste('httk:',httk_data$fu_source, sep=' '), httk_data$fu_source)
   
   #remove unwanted columns
-  httk_data <- rm_df_cols(httk_data,c('fu_source_iv'))
+  rm_cols <- c('fu.x','Human.Funbound.plasma.Point','fu.y','fu_source_iv')
+  httk_data <- rm_df_cols(httk_data,rm_cols)
   
   #set the units for the fraction unbound
   httk_data$fu_units = "fraction"
@@ -211,6 +221,10 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
                                            as.numeric(httk_data$CLint_iv)),
                                 na.rm = T)
     
+  } else if (CLint_operation == 'None'){
+    
+    httk_data$CLint <- apply(httk_data[,c('CLint1','CLint_iv')],1,function(x) paste0(x[!is.na(x)], collapse = ' & '))
+    
   } else{
     
     httk_data$CLint <- rowMeans(data.frame(as.numeric(httk_data$CLint1),
@@ -242,10 +256,12 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   
   #organise the source of systemic clearance
   httk_data <- httk_data %>% rename(Systemic_CL = `CL (mL/min/kg)`)
-  httk_data <- httk_data %>% rename(Systemic_CL_source = Obach2008_source)
-  httk_data$Systemic_CL_source <- ifelse(is.na(httk_data$Systemic_CL),
-                                   NA,
-                                   paste('httk:',httk_data$Systemic_CL_source,sep=' '))
+  if (nrow(Obach_data)>0){
+    httk_data <- httk_data %>% rename(Systemic_CL_source = Obach2008_source)
+    httk_data$Systemic_CL_source <- ifelse(is.na(httk_data$Systemic_CL),
+                                           NA,
+                                           paste('httk:',httk_data$Systemic_CL_source,sep=' '))
+  }
   
   #convert clearance value from mL/min/kg to L/hr (multiply systemic CL by 0.06 and BW) for later iterations
   
@@ -350,7 +366,9 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   physchem_httk <- physchem_httk[order(physchem_httk$Code),]
 
   #oraganise data set
-  physchem_httk <- physchem_httk %>% relocate(DOSE, .after = ChEMBL.ID)
+  if ('DOSE' %in% colnames(physchem_httk)){
+    physchem_httk <- physchem_httk %>% relocate(DOSE, .after = ChEMBL.ID)
+  }
   physchem_httk <- physchem_httk %>% relocate(DTXSID.y, .after = ChEMBL.ID)
 
   #rename columns

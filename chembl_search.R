@@ -13,8 +13,8 @@ CHEMBLSearch <- function (data){
   
   #Names from chembl are sometimes NA, repopulate from data
   nameless_compounds_inchikeys<-ChEMBL_search$InChIKey[which(is.na(ChEMBL_search$COMPOUND.NAME))]
-  compound_names_found<-data$Compound[which(data$InChiKey %in% nameless_compounds_inchikeys)]
-  ChEMBL_search$COMPOUND.NAME[which(is.na(ChEMBL_search$COMPOUND.NAME))]<-toupper(compound_names_found)
+  ordered_inchi_data <- data[match(nameless_compounds_inchikeys, data$InChiKey), ]
+  ChEMBL_search$COMPOUND.NAME[which(is.na(ChEMBL_search$COMPOUND.NAME))]<-toupper(ordered_inchi_data$Compound)
 
   ## check search results for duplicates based on molregno, SMILES, ChEMBLID
   ChEMBL_search_CHECK1 <- ChEMBL_search[!duplicated(ChEMBL_search$Molregno),]
@@ -34,6 +34,9 @@ CHEMBLSearch <- function (data){
   
   #add column for source of data
   ChEMBL_search$data_source <- 'ChEMBL v29'
+  
+  ChEMBL_search <- ChEMBL_search %>% relocate(Code, .before = InChIKey)
+  ChEMBL_search <- ChEMBL_search %>% relocate(COMPOUND.NAME, .before = InChIKey)
   
   return(ChEMBL_search)
 }

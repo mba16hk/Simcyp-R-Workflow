@@ -28,9 +28,15 @@ SusdatSearch <- function (info, nf_in_chembl, ChEMBL_search, logP_selection_flag
     found_in_susdat <- found_in_susdat[-NA_vals,]
   }
   
-  keep<-c('StdInChIKey','Monoiso_Mass', 
+  keep<-c('StdInChIKey','SMILES','Monoiso_Mass', 'Molecular_Formula', 'StdInChI',
           'logKow_EPISuite', 'Exp_logKow_EPISuite')
   found_in_susdat<- keep_df_cols(found_in_susdat, keep)
+  
+  #merge codes
+  code_idx <- which(info$InChiKey %in% found_in_susdat$StdInChIKey)
+  data_codes <- info[code_idx,c('InChiKey','Code')]
+  found_in_susdat <- merge(found_in_susdat,data_codes,
+                           by.x='StdInChIKey',by.y='InChiKey',all=T)
   
   #convert to numeric values
   found_in_susdat$Monoiso_Mass <- as.numeric(found_in_susdat$Monoiso_Mass)
@@ -109,10 +115,10 @@ SusdatSearch <- function (info, nf_in_chembl, ChEMBL_search, logP_selection_flag
   
   #merge the susdata with the ChEMBL Search
   ChEMBL_sus_search<-merge(ChEMBL_search, found_in_susdat,
-                           by.x = c('InChIKey', 'Code',
+                           by.x = c('InChIKey', 'Code', 'SMILES','Molecular_Formula', 'Standard.Inchi',
                                     'MW', 'logPow','data_source', additional_names), 
-                           by.y = c('StdInChIKey','Code', 'Monoiso_Mass',
-                                    'LogP','data_source',additional_names),
+                           by.y = c('StdInChIKey','Code', 'SMILES','Molecular_Formula', 'StdInChI',
+                                    'Monoiso_Mass','LogP','data_source',additional_names),
                            all= T)
   
   #repopulate SMILES
@@ -121,7 +127,8 @@ SusdatSearch <- function (info, nf_in_chembl, ChEMBL_search, logP_selection_flag
   found_smiles_indicies <- which(info$InChiKey %in% missing_smiles_inchi)
   
   #found SMILES
-  ChEMBL_sus_search$SMILES[missing_smiles_indicies]<-info$SMILES[found_smiles_indicies]
+  ordered_inchi_info <- info[match(missing_smiles_inchi, info$InChiKey), ]
+  ChEMBL_sus_search$SMILES[missing_smiles_indicies]<-ordered_inchi_info$SMILES
   
   #repopulate compound name
   missing_name_indicies <- which(is.na(ChEMBL_sus_search$COMPOUND.NAME))
@@ -129,7 +136,8 @@ SusdatSearch <- function (info, nf_in_chembl, ChEMBL_search, logP_selection_flag
   found_name_indicies <- which(info$InChiKey %in% missing_name_inchi)
   
   #found names
-  ChEMBL_sus_search$COMPOUND.NAME[missing_name_indicies]<-info$Compound[found_name_indicies]
+  ordered_inchi_info <- info[match(missing_name_inchi, info$InChiKey), ]
+  ChEMBL_sus_search$COMPOUND.NAME[missing_name_indicies]<-toupper(ordered_inchi_info$Compound)
 
   #Organise dataframe columns
   ChEMBL_sus_search <- ChEMBL_sus_search %>% relocate(SMILES, .after = InChIKey)
@@ -147,7 +155,7 @@ SusdatSearch <- function (info, nf_in_chembl, ChEMBL_search, logP_selection_flag
 NotFoundInsusdat <- function (NOT_FOUND, ChEMBL_sus_search){
   
   #Update NOT_FOUND df
-  NOT_FOUND<-filter(NOT_FOUND,NOT_FOUND$SMILES %!in% ChEMBL_sus_search$SMILES)
+  NOT_FOUND<-filter(NOT_FOUND,NOT_FOUND$InChiKey %!in% ChEMBL_sus_search$InChIKey)
   
   NOT_FOUND<- keep_df_cols(NOT_FOUND,c('Code','SMILES'))
   return(NOT_FOUND)
@@ -168,8 +176,10 @@ CAS_and_DTXSID<- function(info){
   found_in_susdat<-filter(susdat, 
                            susdat$StdInChIKey %in%  info$InChiKey)
   
-  #remove duplicates based on the Norman ID
-  found_in_susdat<-found_in_susdat[!duplicated(found_in_susdat$Norman_ID),]
+  #remove duplicates based on the Norman ID if the duplicates are present
+  if (TRUE %in% duplicated(found_in_susdat$Norman_ID)){
+    found_in_susdat<-found_in_susdat[!duplicated(found_in_susdat$Norman_ID),]
+  }
   
   #only keep the columns of interest
   keep_cols <- c('CAS_RN','StdInChIKey','DTXSID')
@@ -177,9 +187,13 @@ CAS_and_DTXSID<- function(info){
   
   #merge the info dataframe with the CAS_DTXSID by inchikey
   CAS_DTXSID <- merge(CAS_DTXSID, info, by.x = "StdInChIKey", by.y = "InChiKey", all= T)
-  missing_cas <- which(is.na(CAS_DTXSID$CAS_RN))
-  CAS_DTXSID <- CAS_DTXSID[-missing_cas,]
   
+  #if there are compounds with missing CAS values remove them
+  missing_cas <- which(is.na(CAS_DTXSID$CAS_RN))
+  if (length(missing_cas) > 0){
+    CAS_DTXSID <- CAS_DTXSID[-missing_cas,]
+  }
+
   #remove prefix in CAS_RN
   CAS_DTXSID$CAS_RN <- gsub("CAS_RN:\\s","",CAS_DTXSID$CAS_RN)
   
