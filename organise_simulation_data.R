@@ -1,5 +1,17 @@
 
-OrganiseInputData <- function (httk_exp_data, Vss_method = 3, Input_Dose = 100, UNITS = 'mg/kg', info){
+OrganiseInputData <- function (httk_exp_data, info,
+                               
+                               #things the user can chnage
+                               Vss_method = 3, Input_Dose = 100, UNITS = 'mg/kg',
+                               
+                               #only oral administration allowed for now
+                               admin_route = 'Oral', 
+                               
+                               #can set the BP value for acids if they are missing
+                               BP_acids = 0.55,
+                               
+                               #can change the threshold of base pka to assume they bind to AGP
+                               AGP_pKa_threshold = 7){
   
   # -------------- Moleclar Weight -----------------------#
   
@@ -28,12 +40,12 @@ OrganiseInputData <- function (httk_exp_data, Vss_method = 3, Input_Dose = 100, 
   # If the compound is from EPI Suite and it has a pKa (in acidic pKa which we merged there),
   # then if pKa <7 compound is acidic, if >7 compound is basic
   httk_exp_data$Compound.type <- ifelse(is.na(httk_exp_data$Compound.type) & 
-                                          httk_exp_data$data_source == 'EPI SUITE (EPA) - Experimental Data' & 
+                                          str_detect(httk_exp_data$data_source,'EPI SUITE (EPA)') & 
                                           !is.na(httk_exp_data$Acidic..pKa) & httk_exp_data$Acidic..pKa <7,
                                         'ACID', httk_exp_data$Compound.type)
   
   httk_exp_data$Compound.type <- ifelse(is.na(httk_exp_data$Compound.type) & 
-                                          httk_exp_data$data_source == 'EPI SUITE (EPA) - Experimental Data' & 
+                                          str_detect(httk_exp_data$data_source,'EPI SUITE (EPA)') & 
                                           !is.na(httk_exp_data$Acidic..pKa) & httk_exp_data$Acidic..pKa >7,
                                         'BASE', httk_exp_data$Compound.type)
   
@@ -87,7 +99,7 @@ OrganiseInputData <- function (httk_exp_data, Vss_method = 3, Input_Dose = 100, 
                                    "(",CMPD_IMPORT$ChEMBL_ID, "; ",
                                    CMPD_IMPORT$InChiKey,")", sep = "")
   #set route of administration
-  CMPD_IMPORT$Route <- "Oral"
+  CMPD_IMPORT$Route <- admin_route
   
   if ('DOSE' %!in% colnames(httk_exp_data)){
     CMPD_IMPORT$Dose <- Input_Dose
@@ -139,7 +151,7 @@ OrganiseInputData <- function (httk_exp_data, Vss_method = 3, Input_Dose = 100, 
   if (!is.null(httk_exp_data$BP_value)){
     CMPD_IMPORT$BP_value <- httk_exp_data$BP_value
     CMPD_IMPORT$BP_value <- ifelse(CMPD_IMPORT$Compound_type == "Monoprotic acid" &
-                                     is.na(CMPD_IMPORT$BP_value), 0.55, CMPD_IMPORT$BP_value)
+                                     is.na(CMPD_IMPORT$BP_value), BP_acids, CMPD_IMPORT$BP_value)
     
     CMPD_IMPORT$BP_type<- ifelse(CMPD_IMPORT$BP_value != 0 &
                                    !is.na(CMPD_IMPORT$BP_value),"User input", "Predicted")
@@ -158,7 +170,7 @@ OrganiseInputData <- function (httk_exp_data, Vss_method = 3, Input_Dose = 100, 
   
   #HSA or AGP determination
   CMPD_IMPORT$HSA_AGP <- ifelse(CMPD_IMPORT$Compound_type == "Monoprotic base" 
-                                & CMPD_IMPORT$pKa1 >= 7, "AGP", "HSA")
+                                & CMPD_IMPORT$pKa1 >= AGP_pKa_threshold, "AGP", "HSA")
   
   CMPD_IMPORT$Absorption_Model <- "First Order Model" 
   CMPD_IMPORT$Permeability_system <- "PSA/HBD"
@@ -218,6 +230,6 @@ OrganiseInputData <- function (httk_exp_data, Vss_method = 3, Input_Dose = 100, 
   #organise in ascending CS number
   CMPD_IMPORT <- CMPD_IMPORT[order(CMPD_IMPORT$CS_code),]
   
-  return(CMPD_IMPORT)
+  return(CMPD_IMPORT[1:5,])
   
 }

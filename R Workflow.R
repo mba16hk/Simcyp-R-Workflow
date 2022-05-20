@@ -6,6 +6,7 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time) {
   info <- Compound
   
   #specify compoind CS ID
+  message( "--------------------------------------------")
   message( paste("Compound" , info$CS_code) )
   
   # Set Parameters 
@@ -78,7 +79,6 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time) {
     Simcyp::SetCompoundParameter("fu",CompoundID$Substrate, 1L ) 
     # predicted fu from Simcyp
     Pred_fu<-Simcyp::GetCompoundParameter("idFu2",CompoundID$Substrate)  
-    message(paste("Predicted Fu =", round(Pred_fu,3), sep="")) 
     
   } else{
     message(paste("Setting User-input Fu =", info$fu_value, sep=""))
@@ -95,7 +95,7 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time) {
       Simcyp::SetCompoundParameter("BP",CompoundID$Substrate, 1L )  
       message("BP not specified by user. Predicted BP used instead.")
       Pred_bp<-Simcyp::GetCompoundParameter("BP",CompoundID$Substrate)
-      message(paste("Predicted BP =", round(Pred_bp,3), sep=""))
+
     } else {
       #insert user-input BP
       Simcyp::SetCompoundParameter(CompoundParameterID$bp,CompoundID$Substrate, as.numeric(info$BP_value))
@@ -139,28 +139,28 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time) {
   # Set CLint Value if it is not NA
   # -------------------------------
   if (!is.na(info$CLint_value)){
-    SetCompoundParameter("idEK_HEP_Clint",CompoundID$Substrate, as.numeric(info$CLint_value))
+    Simcyp::SetCompoundParameter("idEK_HEP_Clint",CompoundID$Substrate, as.numeric(info$CLint_value))
     message("CLint value provided by the user.")
   }
   
   # Input the calculated fu_inc value
   # ----------------------------------
-  SetCompoundParameter(CompoundParameterID$WOMC_HepatocyteFUinc1, 
+  Simcyp::SetCompoundParameter(CompoundParameterID$WOMC_HepatocyteFUinc1, 
                        CompoundID$Substrate, as.numeric(info$fu_inc))
 
   
   #Set the input dose and their respective Units
   #---------------------------------------------
-  SetCompoundParameter(CompoundParameterID$Dose, CompoundID$Substrate, as.numeric(info$Dose))
+  Simcyp::SetCompoundParameter(CompoundParameterID$Dose, CompoundID$Substrate, as.numeric(info$Dose))
   
   if (info$Dose_Units == "mg/kg"){
-    SetCompoundParameter(CompoundParameterID$DoseType, CompoundID$Substrate, 2L)
+    Simcyp::SetCompoundParameter(CompoundParameterID$DoseType, CompoundID$Substrate, 2L)
     Units <- GetCompoundParameter(CompoundParameterID$DoseType,CompoundID$Substrate)
   } else if (info$Dose_Units == "mg"){
-    SetCompoundParameter(CompoundParameterID$DoseType, CompoundID$Substrate, 1L)
+    Simcyp::SetCompoundParameter(CompoundParameterID$DoseType, CompoundID$Substrate, 1L)
     Units <- GetCompoundParameter(CompoundParameterID$DoseType,CompoundID$Substrate)
   } else if (info$Dose_Units == "mg/m^2"){
-    SetCompoundParameter(CompoundParameterID$DoseType, CompoundID$Substrate, 0L)
+    Simcyp::SetCompoundParameter(CompoundParameterID$DoseType, CompoundID$Substrate, 0L)
     Units <- GetCompoundParameter(CompoundParameterID$DoseType,CompoundID$Substrate)
   }
   
@@ -168,19 +168,19 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time) {
   message(paste('Setting dose to', as.numeric(info$Dose),unit_names[Units+1], sep=' '))
   
   # 2.1 Set the Number of Trials
-  SetParameter(SimulationParameterID$Group,CategoryID$SimulationData, CompoundID$Substrate, as.integer(trials)) # Trial num
-  print(paste('trials:',GetParameter(SimulationParameterID$Group,CategoryID$SimulationData, CompoundID$Substrate), sep = ' '))
+  Simcyp::SetParameter(SimulationParameterID$Group,CategoryID$SimulationData, CompoundID$Substrate, as.integer(trials)) # Trial num
+  #print(paste('trials:',GetParameter(SimulationParameterID$Group,CategoryID$SimulationData, CompoundID$Substrate), sep = ' '))
 
   # 2.2 Set the Number of Subjects for each trial
-  SetParameter(Simcyp::SimulationParameterID$Mempgroup,CategoryID$SimulationData, CompoundID$Substrate,as.integer(subjects))
-  print(paste('subjects:',GetParameter(Simcyp::SimulationParameterID$Mempgroup,CategoryID$SimulationData, CompoundID$Substrate), sep = ' '))
+  Simcyp::SetParameter(Simcyp::SimulationParameterID$Mempgroup,CategoryID$SimulationData, CompoundID$Substrate,as.integer(subjects))
+  message(paste('Simulating',GetParameter(Simcyp::SimulationParameterID$Mempgroup,CategoryID$SimulationData, CompoundID$Substrate), 'subjects.', sep = ' '))
   
   GetParameter(SimulationParameterID$Pop,CategoryID$SimulationData, CompoundID$Substrate)   # Population Size. This has not changed yet, one needs to change this also to => trial*subject 
   SetParameter(SimulationParameterID$Pop,CategoryID$SimulationData, CompoundID$Substrate,as.integer(trials*subjects))
-  print(paste('product:',as.integer(trials*subjects), sep = ' '))
+  #print(paste('product:',as.integer(trials*subjects), sep = ' '))
   
   #set the simulation duration
-  Set_SimDuration(Time)
+  SetParameter(SimulationParameterID$StudyDuration,CategoryID$SimulationData, CompoundID$Substrate, Time)  # idStudyDuration
   
 }
 
@@ -189,10 +189,7 @@ SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects,
   # Initialize data frames to store results 
   Output<- NULL
   
-  # START workflow using Predicted Clint (MechKiM Model)
-  #simulated_data<-c()
-  
-  for (i in 1:nrow(data)) { #nrow(Mechkim)
+  for (i in 1:nrow(data)) {
     
     #Empty vectors to save predictions
     Concs<-vector(); Times<-vector()
@@ -201,52 +198,26 @@ SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects,
     #Select 1 compound at a time
     Data<- data[i,]
     
-    # Set workspace for MechKiM model
+    # Set workspace
     capture.output(Simcyp::SetWorkspace(workspace), file='NUL')
     
     # Set the parameters of the compound in the loaded workspace
     Set_parameters(Data, trials, subjects, Time)
     
-    #Create a separate db for each compound
-    DBfilename <- paste( Data$CS_code,".db",sep="")  # Create the Database file name, with DB Extension
+    # Create a separate db for each compound
+    DBfilename <- paste( Data$CS_code,".db",sep="")
     
-    DBfilepath <- file.path(path_user, DBfilename) # File path to save the database results to
+    # File path to save the database results to
+    DBfilepath <- file.path(path_user, DBfilename) 
     
     # Run simulation, suppress all console output 
     SetParameter("idSeedVariable", 3, 0, 4) #seed 0
     capture.output(Simcyp::Simulate(database=DBfilepath), file='NUL')  
     message( paste("Simulation Complete for ", Data$CS_code) )
     
-    conn <- RSQLite::dbConnect(SQLite(),DBfilename)   #DBfilepath
-    #simulated_data<-rbind(simulated_data,extract_info(conn))
-    
-    # Get the subject number 
-    Ind_num<- GetAllIndividualValues_DB("idIndividualNo",conn)
-    #Group_num<- GetAllIndividualValues_DB("idGroupNo",conn)# Get the Trial number for the population
-    
-    No_sub<- length(Ind_num)
-    
-    #Extract Concentration time profile 
-    for (j in 1:No_sub ){
-      Current_C<- GetProfile_DB("281474959933446", individual=j, 
-                                conn, inhibition = FALSE)  #Csys  Data
-      Current_T<- GetProfile_DB("281474976645120", individual=j, 
-                                conn, inhibition = FALSE)   #Time data
-      
-      Times  <- Current_T   
-      Concs  <- cbind(Concs, Current_C) 
-      Subject_ID<- c(Subject_ID, paste( "Subject" , j,  sep=""))
-      
-    }
-    
-    RSQLite::dbDisconnect(conn) #Detach database connection 
-    
-    colnames(Concs) <- c( Subject_ID )  # renaming columns 
-    Group  <- rep(Data$CS_code,length(Times)) 
-    Output<- rbind(Output, Output<- data.frame(Group, Times, Concs) )
-    
+    Output <- rbind(Output, TissueProfiles(Data$CS_code))
   }
-  
+
   return(Output)
   
 }
@@ -264,18 +235,39 @@ SimcypSimulation <- function (organised_data, trials = 1, subjects, Time){
   #create a list of workspaces in the directory
   SimcypWksz<-unlist(list.files(path_user, pattern="\\.wksz$",full.names=FALSE , recursive=F ))
   
+  if (organised_data$Route[1] == 'Oral'){
+    
+    oral_wkspace_indicies <- str_detect(SimcypWksz,'Oral')
+    SimcypWksz = SimcypWksz[oral_wkspace_indicies]
+    
+  } else if (organised_data$Route[1] == 'IV Bolus'){
+    
+    #infused for a duration of 30 seconds
+    bolus_wkspace_indicies <- str_detect(SimcypWksz,'Bolus')
+    SimcypWksz = SimcypWksz[bolus_wkspace_indicies]
+    
+  } else if (organised_data$Route[1] == 'Dermal'){
+    
+    #applied to an area of 60 cm^2
+    dermal_wkspace_indicies <- str_detect(SimcypWksz,'Dermal')
+    SimcypWksz = SimcypWksz[dermal_wkspace_indicies]
+    
+  }
+  
   # Separating the data based on Clint value. 
   Mechkim <- organised_data %>% filter(is.na(CLint_value) )  
   NonMechkim <- organised_data %>% filter(!is.na(CLint_value) ) 
   
   if (nrow(Mechkim != 0)){
-    simulated_data_MechKim <- SimulateWorkspace(Mechkim, SimcypWksz[1], path_user, trials, subjects, Time)
+    simulated_data_MechKim <- SimulateWorkspace(Mechkim, SimcypWksz[1], 
+                                                path_user, trials, subjects, Time)
   }else{
     simulated_data_MechKim <- data.frame()
   }
   
   if (nrow(NonMechkim != 0)){
-    simulated_data_NonMechKim <- SimulateWorkspace(NonMechkim, SimcypWksz[2], path_user, trials, subjects, Time)
+    simulated_data_NonMechKim <- SimulateWorkspace(NonMechkim, SimcypWksz[2], 
+                                                   path_user, trials, subjects, Time)
   }else{
     simulated_data_NonMechKim <- data.frame()
   }
@@ -292,12 +284,18 @@ SimcypSimulation <- function (organised_data, trials = 1, subjects, Time){
  
 AdditionalOutputs <- function (organised_data){
   
+  require(RSQLite)
+  
   codes<-organised_data$CS_code
   simulated_data <-list()
   for (i in 1:length(codes)){
     info_to_extract <- RSQLite::dbConnect(SQLite(),paste(codes[i],'.db',sep=''))   #DBfilepath
-    simulated_data[[i]]<-extract_info(info_to_extract)
-    RSQLite::dbDisconnect(info_to_extract) #Detach database connection 
+    
+    #extract main data
+    simulated_data[[i]]<- extract_info(info_to_extract)
+    
+    #Detach database connection
+    RSQLite::dbDisconnect(info_to_extract)  
   }
   
   names(simulated_data)<- codes
@@ -343,4 +341,131 @@ SummaryOutputs <- function (simulated_data){
   
   return(summary_data)
   
+}
+
+#Extract useful information from compound databases
+extract_info <- function(info_to_extract){
+  
+  tissues <- c('Brain','Heart','Gut','Lung','Kidney','Pancreas',
+               'Liver','Spleen','Skin','Muscle','Adipose','Plasma')
+  
+  tissues <- toupper(tissues)
+  profile_indicies <- c("281470715297801","281470748852233","281470732075017",
+                   "281470799183881","281470765629449","281470933401609", 
+                   "281470782406665", "281470849515529", "281470832738313",
+                   "281470815961097","281470681743369","281474959933446")
+  
+  #find the number of simulated individuals
+  individuals<- length(unique(GetAllIndividualValues_DB(IndividualValueID$IndividualNo,info_to_extract)))
+  
+  #extract AUC parameters for all individuals
+  AUC_data<-c()
+  for (i in 1:individuals){
+    
+    #get plasma cmax from the database files
+    dat<-GetAUCFrom_DB(ProfileID$Csys,CompoundID$Substrate,individual = i,info_to_extract)
+    
+    ########## extract tissue-related Cmax values #######################
+    
+    #formulate SQL query
+    query <- paste("SELECT Cmax FROM AUCData WHERE (Dose = 1 AND Individual =",i,"AND ProfileIndex = ?)", sep = ' ')
+    Cmax_val <- dbSendQuery(conn = info_to_extract, query)
+    dbBind(Cmax_val, list(profile_indicies))
+    
+    #extract the Cmax at the different tissue types
+    Cmax_tissue <- data.frame(dbFetch(Cmax_val))
+    dbClearResult(Cmax_val)
+    
+    #bind the cmax tissue values with the dat structure 
+    dat <- unlist(append(dat,unlist(Cmax_tissue)))
+    
+    ######################################################################
+    
+    #get cmax in other tissues
+    AUC_data <- rbind(AUC_data,dat)
+  }
+  
+  colnames(AUC_data)[19:ncol(AUC_data)] <- paste0('Cmax_',tissues)
+  AUC_data <- as.data.frame(AUC_data)
+  
+  #Extract information from dB
+  BSA<- GetAllIndividualValues_DB(IndividualValueID$BSA,info_to_extract)# BSA (m^2)
+  Age<- GetAllIndividualValues_DB(IndividualValueID$Age,info_to_extract)# Age (years)
+  BW<- GetAllIndividualValues_DB(IndividualValueID$BW,info_to_extract)# BW (kg)
+  GFR<- GetAllIndividualValues_DB(IndividualValueID$GFR,info_to_extract) #mL/min/1.73m^2
+  
+  #predicted values
+  Vss<- GetAllCompoundResults_DB('idPredictedVss',compound = CompoundID$Substrate ,info_to_extract) #L/kg
+  Fg<- GetAllCompoundResults_DB('idfGut', compound = CompoundID$Substrate,info_to_extract)
+  Fh<- GetAllCompoundResults_DB('idfLiver', compound = CompoundID$Substrate,info_to_extract)
+  Fa<- GetAllCompoundResults_DB('idfaAdj',compound = CompoundID$Substrate, info_to_extract)
+  Fu_plasma <- GetAllCompoundResults_DB('idfuAdj', compound = CompoundID$Substrate, info_to_extract)
+  Ka<- GetAllCompoundResults_DB('idkaAdj',compound = CompoundID$Substrate, info_to_extract) #absorption rate constant (1/h)
+  BP <- GetAllCompoundResults_DB('idbpAdj', compound = CompoundID$Substrate, info_to_extract) # BP ratio
+  
+  data_from_dB<-cbind(AUC_data,BSA,Age,BW,GFR,Vss,Fg,Fh,Fa,Fu_plasma,Ka,BP)
+  
+  rmv <- c('ProfileIndex','Inhibition','DiffStoreIndex','Dose',
+           'StartTime','EndTime','Tmin','Cmin','Cmax', 'AUCt_full',
+           'Cfirst', 'Clast','LambdaZ')
+  
+  data_from_dB<- rm_df_cols(data_from_dB,rmv)
+  
+  return(data_from_dB)
+}
+
+TissueProfiles <- function(compound_code){
+  
+  # Initialize empty output list where each list element is a dataframe of profile for a tissue type
+  Tissue_profiles<- list()
+  
+  tissues <- c('Brain','Heart','Gut','Lung','Kidney','Pancreas',
+               'Liver','Spleen','Skin','Muscle','Adipose','Plasma')
+  
+  tissues <- toupper(tissues)
+  profile_ids <- c("281470715297801","281470748852233","281470732075017",
+                   "281470799183881","281470765629449","281470933401609", 
+                   "281470782406665", "281470849515529", "281470832738313",
+                   "281470815961097","281470681743369","281474959933446")
+  
+  Output = NULL
+  
+  for (i in 1:length(tissues)){
+    
+    #Empty vectors to save predictions
+    Concs<-vector(); Times<-vector()
+    Group<-vector(); Subject_ID<- vector()
+    
+    conn <- RSQLite::dbConnect(SQLite(),paste(compound_code,'.db',sep=''))
+    # Get the subject number 
+    Ind_num<- GetAllIndividualValues_DB("idIndividualNo",conn)
+    
+    for (j in 1:length(Ind_num)){
+      #tissue conc profile
+      tissue_conc <- GetProfile_DB(profile_ids[i], individual = j, conn, 
+                                   inhibition = FALSE)
+      if (i==1){
+        #time range
+        Times <- GetProfile_DB("281474976645120", individual=j, 
+                               conn, inhibition = FALSE)
+      }
+      
+      Concs  <- cbind(Concs, tissue_conc) 
+      Subject_ID<- c(Subject_ID, paste( "Subject",j,'_',tissues[i],  sep=""))
+    }
+    
+    colnames(Concs) <- c(Subject_ID)  # renaming columns
+    
+    if (i==1){
+      Group  <- rep(compound_code,length(Times))
+      Output<- data.frame(Group, Times, Concs)
+    } else{
+      Output<- cbind(Output, data.frame(Concs))
+    }
+    
+    RSQLite::dbDisconnect(conn) #Detach database connection
+  }
+  
+  return(Output)
+    
 }

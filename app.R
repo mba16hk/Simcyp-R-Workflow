@@ -7,18 +7,21 @@ library(shinyWidgets)
 
 
 setwd(dirname(rstudioapi::getSourceEditorContext()$path))
+#import the scripts 
 source('input_query.R')
 source('chembl_search.R')
-source('EPI_search.R')
-source('ACD_labs.R')
+source('susdat_search.R')
+source('ACD_Labs.R')
 source('httk_search.R')
 source('experimental_data_search.R')
 source('organise_simulation_data.R')
+source('Additional_data.R')
 source('R Workflow.R')
 source('PredictParams.R')
+source('plotting_functions.R')
 
 ui <- dashboardPage( skin = 'black',
-    dashboardHeader(title = "Simcyp-R Workflow"),
+    dashboardHeader(title = "SimRFlow"),
     dashboardSidebar(
       sidebarMenu(menuItem('Data Collection', 
                            tabName = 'data_collection',
@@ -49,7 +52,7 @@ ui <- dashboardPage( skin = 'black',
                                 multiple = FALSE, #doesn't allow multi-file upload
                                 accept = c(".csv",".xlsx"),
                                 placeholder = 'test_compounds.xlsx'),
-                             "Ensure headers include: SMILES, INCHIKEY, CODE, COMPOUND, and CAS",
+                             "Ensure headers are: SMILES, INCHIKEY, CODE, and COMPOUND",
                              placement="bottom", trigger = "hover"),
 
                       #button to collect physiochemical information
@@ -74,18 +77,18 @@ ui <- dashboardPage( skin = 'black',
                                               icon = icon('search'),
                                               style = 'color: #fff; 
                            background-color: #a44f2e; border-color: #8a2b07'),
-                                 "Searches HTTK database for any experimental data.",
+                                 "Searches 3 HTTK databases for any experimental data.",
                                  placement="bottom", trigger = "hover")
                         ),
                         
                         conditionalPanel(
                           condition = "input.include_exp_data > 0",
-                          tipify(fileInput("file2", "XLSX Experimental Data File",
+                          tipify(fileInput("file2", "CSV/XLSX Experimental Data File",
                                            multiple = FALSE,
                                            buttonLabel=list(icon("folder"),"Browse"),
-                                           accept = c(".xlsx"),
+                                           accept = c(".xlsx",".csv"),
                                            placeholder = 'exp_data.xlsx'),
-                                 "Ensure headers include: CODE, BP, FU and CLINT",
+                                 "Ensure headers are: CODE, BP, FU and CLINT",
                                  placement="bottom", trigger = "hover"),
                           
                           #numeric input for different thresholds
@@ -115,6 +118,11 @@ ui <- dashboardPage( skin = 'black',
                               )
                             ),
                             
+                            #see if the user wants to include compounds with missing information
+                            tipify(checkboxInput("exp_mean_flag", "Average inputs with httk", FALSE),
+                                   "Computed arithmetic mean of your input data and those from httk.",
+                                   placement="bottom", trigger = "hover"),
+                            
                             #button to collect physiochemical information
                             tipify(actionButton("search_exp",
                                                 label = "Search+Organise Experimental Data",
@@ -129,7 +137,7 @@ ui <- dashboardPage( skin = 'black',
                       ),
                       
                       width = 3,
-                      height = 600),#end of box
+                      height = "20em"),#end of box
                   
 
                   conditionalPanel(
@@ -146,7 +154,7 @@ ui <- dashboardPage( skin = 'black',
                       dataTableOutput("TBL6"),
                       
                       #some information for the user
-                      p("The CSV file can be optionally imported into ACD labs to search 
+                      p("Idea: The CSV file can be optionally imported into ACD/Labs
                         for additional physiochemical data. You may proceed without uploading ACD data."),
                       
                       #check if the user would like to upload information they manually collected from ACD labs
@@ -164,7 +172,7 @@ ui <- dashboardPage( skin = 'black',
                                                     icon = icon('table'),
                                                     style = 'color: #fff; 
                            background-color: #a44f2e; border-color: #8a2b07')),
-                      height = "250px",
+                      height = "20em",
                       status = 'danger',
                       solidHeader = T,
                       width = 9,
@@ -193,7 +201,7 @@ ui <- dashboardPage( skin = 'black',
                                     width = 12)),
                     
                     #Visualise the physiochemical Data
-                    tabPanel("Physchem Data + ACD", 
+                    tabPanel("Physchem Data + Further Data", 
                             column(dataTableOutput("TBL7"), 
                                     height = "250px",
                                     width = 12)),
@@ -217,7 +225,7 @@ ui <- dashboardPage( skin = 'black',
                                     style = 'color: #fff;
                                      background-color: #a44f2e; 
                                      border-color: #8a2b07'),#end of action button
-                       "Predict Fu, Vss and BP using Simcyp",
+                       "Predict Fu, Vss, BP and Kd using Simcyp",
                        placement="top", trigger = "hover"),
                 
                 box(
@@ -236,7 +244,7 @@ ui <- dashboardPage( skin = 'black',
         tabItem('run_simulation',
                 fluidRow(
                     #Parameters for simulation
-                    box(title = 'Set Additional Parameters',
+                    box(title = 'Simulation Parameters',
                         status = 'success',
                         height = 600,
                         #solidHeader = TRUE,
@@ -260,10 +268,33 @@ ui <- dashboardPage( skin = 'black',
                                                "mg" = "mg",
                                                "mg/m^2" = "mg/m^2"))),
                         
+                        #,
+                        p('Assumptions:'),
                         fluidRow(
                           
                           column(
-                            width = 3,
+                            width = 5,
+                            tipify(numericInput('acid_bp_ratio', 'Acid BP ratio', 0.55,
+                                         min = 0.55, max = NA),
+                                   "Acids without any BP ratio value are assumed to have this BP ratio",
+                                   placement="bottom", trigger = "hover")
+                          ),
+                          
+                          
+                          column(
+                            width = 5,
+                            tipify(numericInput('agp_threshold', 'pKa threshold for AGP binding to bases', 7,
+                                         min = 5.5, max = 8.5),
+                                   "Bases that have a pKa value higher than this threshold are assumed to bing to AGP",
+                                   placement="bottom", trigger = "hover")
+                          )
+                        ),
+                        
+                        p('Trial Design:'),
+                        fluidRow(
+                          
+                          column(
+                            width = 4,
                             numericInput('subjects', ' Subjects', 10,
                                          min = 1, max = NA, step = 1)
                           ),
@@ -275,31 +306,37 @@ ui <- dashboardPage( skin = 'black',
                           # ),
                           
                           column(
-                            width = 3,
+                            width = 4,
                             numericInput('sim_time', 'Duration', 24,
-                                         min = 24, max = 240, step = 24)
+                                         min = 4, max = 480, step = 0.5)
                           ),
                           
                           column(
-                            width = 3,
-                            
-                            conditionalPanel(
-                              condition = "output.simulate_check",
-                              #Set some of simcyp's simulation parameters
-                              tipify(actionButton("simulate_button",
-                                                  label = "Simulate",
-                                                  icon = icon('laptop-code'),
-                                                  style = 'color: #fff;
+                            width = 4,
+                            selectInput('administration_route',
+                                        'Administration Route',
+                                        list("Oral" = "Oral",
+                                             "IV Bolus" = "IV Bolus",
+                                             "Dermal" = "Dermal"))
+                           
+                            )
+                        ),
+                        
+                        conditionalPanel(
+                          condition = "output.simulate_check",
+                          #Set some of simcyp's simulation parameters
+                          tipify(actionButton("simulate_button",
+                                              label = "Simulate",
+                                              icon = icon('laptop-code'),
+                                              style = 'color: #fff;
                                      background-color: #a44f2e; 
                                      border-color: #8a2b07'),#end of action button
-                                     "Simulate all compounds in the Simcyp Simulator.",
-                                     placement="top", trigger = "hover")
-                            )
-                            )
+                                 "Simulate all compounds in the Simcyp Simulator.",
+                                 placement="top", trigger = "hover")
                         ),
 
 
-                        width = 5) #end of box
+                        width = 9) #end of box
           
                   ),# end of fluidrow
                 
@@ -311,7 +348,7 @@ ui <- dashboardPage( skin = 'black',
                     
                     #visualise simcyp outputs table
                     tabPanel('Concentration-Time Profiles',
-                             'The concentration time profiles of all simulated compounds and their corresponding subjects:',
+                             'The concentration time profiles of all simulated compounds and their corresponding subjects in different tissues:',
                              column(dataTableOutput("TBL4"),
                                     width = 12)),
                     
@@ -332,6 +369,9 @@ ui <- dashboardPage( skin = 'black',
                   
                   #Enter the compound code  
                   uiOutput("compound_lists"),
+                  
+                  #Enter the tissue type 
+                  uiOutput("tissue_lists"),
                   
                   #Select Log Scale or Normal Scale
                   radioButtons('log_scale','y-axis scale', 
@@ -367,8 +407,8 @@ ui <- dashboardPage( skin = 'black',
                   
                   #select x axis
                   selectInput('x_axis_var', 'x Variable',
-                              choices = list('Tmax'= 'Tmax',
-                                             'Cmax'='Cmax',
+                              choices = list('Plasma Tmax'= 'Tmax',
+                                             'Plasma Cmax'='Cmax_PLASMA',
                                              'AUC'= 'AUC',
                                              'AUCinf'= 'AUCinf',
                                              'Half Life' = 'HalfLife',
@@ -380,15 +420,26 @@ ui <- dashboardPage( skin = 'black',
                                              'Volume of Distribution'='Vss',
                                              'Fraction Absorbed'='Fa',
                                              'Fraction unbound in plasma'= 'Fu_plasma',
-                                             'Ka'='Ka')),
+                                             'Ka'='Ka',
+                                             'Skin Cmax' = 'Cmax_SKIN',
+                                             'Kidney Cmax' =  'Cmax_KIDNEY',
+                                             'Brain Cmax' = 'Cmax_BRAIN',
+                                             'Heart Cmax' = 'Cmax_HEART',
+                                             'Gut Cmax' = 'Cmax_GUT',
+                                             'Lung Cmax' = 'Cmax_LUNG',
+                                             'Liver Cmax' = 'Cmax_LIVER',
+                                             'Pancreas Cmax' = 'Cmax_PANCREAS',
+                                             'Spleen Cmax' = 'Cmax_SPLEEN',
+                                             'Muscle Cmax' = 'Cmax_MUSCLE',
+                                             'Adipose Cmax' = 'Cmax_ADIPOSE')),
                   
                   #Only display y axis option if we are plotting a relationship
                   conditionalPanel(
                     condition = "input.plot_type == 'Relationship'",
                     #select y axis
                     selectInput('y_axis_var', 'y Variable',
-                                choices = list('Tmax'= 'Tmax',
-                                               'Cmax'='Cmax',
+                                choices = list('Plasma Tmax'= 'Tmax',
+                                               'Plasma Cmax'='Cmax_PLASMA',
                                                'AUC'= 'AUC',
                                                'AUCinf'= 'AUCinf',
                                                'Half Life' = 'HalfLife',
@@ -400,17 +451,29 @@ ui <- dashboardPage( skin = 'black',
                                                'Volume of Distribution'='Vss',
                                                'Fraction Absorbed'='Fa',
                                                'Fraction unbound in plasma'= 'Fu_plasma',
-                                               'Ka'='Ka'))
+                                               'Ka'='Ka',
+                                               'Skin Cmax' = 'Cmax_SKIN',
+                                               'Kidney Cmax' =  'Cmax_KIDNEY',
+                                               'Brain Cmax' = 'Cmax_BRAIN',
+                                               'Heart Cmax' = 'Cmax_HEART',
+                                               'Gut Cmax' = 'Cmax_GUT',
+                                               'Lung Cmax' = 'Cmax_LUNG',
+                                               'Liver Cmax' = 'Cmax_LIVER',
+                                               'Pancreas Cmax' = 'Cmax_PANCREAS',
+                                               'Spleen Cmax' = 'Cmax_SPLEEN',
+                                               'Muscle Cmax' = 'Cmax_MUSCLE',
+                                               'Adipose Cmax' = 'Cmax_ADIPOSE'))
                   ), #end of conditional panel
                   
                   #select plot colour
                   selectInput('plot_col', 'Plot Colour',
-                              choices = list('Green'= 'darkseagreen1',
-                                             'Grey'='gray87',
-                                             'Yellow'='khaki1',
-                                             'Pink'='lightpink',
-                                             'Purple'='thistle',
-                                             'Orange'='lightsalmon')),
+                              choices = list('Green'= 'seagreen',
+                                             'Red' = 'red',
+                                             'Blue'='blue',
+                                             'Yellow'='Gold',
+                                             'Pink'='pink',
+                                             'Purple'='purple',
+                                             'Orange'='orange')),
                   
                   plotOutput("additional_plot"),
                   status = "success", 
@@ -423,8 +486,8 @@ ui <- dashboardPage( skin = 'black',
                   
                   # Parameters
                   selectInput('sim_parameters', 'Simulated Parameters',
-                              choices = list('Tmax'= 'Tmax',
-                                             'Cmax'='Cmax',
+                              choices = list('Plasma Tmax'= 'Tmax',
+                                             'Plasma Cmax'='Cmax_PLASMA',
                                              'AUC'= 'AUC',
                                              'AUCinf'= 'AUCinf',
                                              'Half Life' = 'HalfLife',
@@ -432,7 +495,18 @@ ui <- dashboardPage( skin = 'black',
                                              'Volume of Distribution'='Vss',
                                              'Fraction Absorbed'='Fa',
                                              'Fraction unbound in plasma'= 'Fu_plasma',
-                                             'Ka'='Ka')),
+                                             'Ka'='Ka',
+                                             'Skin Cmax' = 'Cmax_SKIN',
+                                             'Kidney Cmax' =  'Cmax_KIDNEY',
+                                             'Brain Cmax' = 'Cmax_BRAIN',
+                                             'Heart Cmax' = 'Cmax_HEART',
+                                             'Gut Cmax' = 'Cmax_GUT',
+                                             'Lung Cmax' = 'Cmax_LUNG',
+                                             'Liver Cmax' = 'Cmax_LIVER',
+                                             'Pancreas Cmax' = 'Cmax_PANCREAS',
+                                             'Spleen Cmax' = 'Cmax_SPLEEN',
+                                             'Muscle Cmax' = 'Cmax_MUSCLE',
+                                             'Adipose Cmax' = 'Cmax_ADIPOSE')),
                   
                   #Select x axis orders
                   radioButtons('param_order','x-axis ordering', 
@@ -442,12 +516,13 @@ ui <- dashboardPage( skin = 'black',
                   
                   #select plot colour
                   selectInput('plot_col_2', 'Bar Colour',
-                              choices = list('Green'= 'darkseagreen1',
-                                             'Grey'='gray87',
-                                             'Yellow'='khaki1',
-                                             'Pink'='lightpink',
-                                             'Purple'='thistle',
-                                             'Orange'='lightsalmon')),
+                              choices = list('Green'= 'seagreen',
+                                             'Red' = 'red',
+                                             'Blue'='blue',
+                                             'Yellow'='Gold',
+                                             'Pink'='pink',
+                                             'Purple'='purple',
+                                             'Orange'='orange')),
 
                   
                   plotOutput("comp_comparison_plot"),
@@ -484,7 +559,7 @@ server <- function(input, output, session) {
                    icon = icon('atom'),
                    style = 'color: #fff; 
                    background-color: #a44f2e; border-color: #8a2b07'),
-             'Searches the ChEMBL and EPI Suite for physiochemical data',
+             'Searches ChEMBL and SusDat for physiochemical data',
              placement="bottom", trigger = "hover")
     })
     
@@ -512,17 +587,17 @@ server <- function(input, output, session) {
     
     not_found_in_chembl <- eventReactive(input$search_physchem,{
         #extract the compounds not found in chembl
-        CompoundsNotFound(data(), chembl_data())
+        NotInChEMBL(data(), chembl_data())
     })
     
     
-    epi_data <- eventReactive(input$search_physchem,{
+    sus_data <- eventReactive(input$search_physchem,{
         #query the epi suite database
-        EPISearch(data(), not_found_in_chembl(), chembl_data())
+      SusdatSearch(data(), not_found_in_chembl(), chembl_data())
     })
     
     
-    output$TBL2 <- renderDataTable(epi_data(),
+    output$TBL2 <- renderDataTable(sus_data(),
                                    rownames = FALSE,
                                    extensions = list('Scroller' = NULL),
                                    options = list(
@@ -539,9 +614,10 @@ server <- function(input, output, session) {
                                      dom = 'tB'
                                    ))
     
+
     nf_compounds <- eventReactive(c(input$search_physchem, input$include_compounds),{
-        #extract the compounds not found in EPI
-      ACD_inputs(data(), not_found_in_chembl(), epi_data(), missing_info = input$include_compounds)
+        #extract the compounds not found in susdat
+      ACD_inputs(data(), not_found_in_chembl(), sus_data(), missing_info = input$include_compounds)
     })
     
     output$ACDLabs_box<-reactive(!is.null(nf_compounds()))
@@ -569,7 +645,7 @@ server <- function(input, output, session) {
     acd_data <- eventReactive(c(input$refresh_physchem,input$upload_ACD_labs),{
       file3 <- input$file3
       req(file3)
-      ACD_outputs(data(),file3$datapath,epi_data())
+      ACD_outputs(data(),file3$datapath,sus_data())
     })
     
     output$TBL7 <- renderDataTable(acd_data(),
@@ -592,27 +668,38 @@ server <- function(input, output, session) {
     output$expdummy<-reactive(!is.null(input$file2))
     outputOptions(output, "expdummy", suspendWhenHidden = FALSE)
     
+    CAS_DTXSID <- eventReactive(c(input$search_exp,input$search_httk_db),{
+      
+      CAS_and_DTXSID(data())
+    })
+    
     physchem_data<-eventReactive(c(input$search_exp,input$search_httk_db),{
-      if(exists('acd_data()')){
 
+      file3 <- input$file3
+      #print(file3)
+      
+      if(!is.null(file3)){
+        
         return(acd_data())
         
-      } else{
 
-        return(epi_data())
-        
+      } else{
+      
+        return(sus_data())
+
       }
     })
-    
+
     httk_only_data <- eventReactive(input$search_httk_db,{
       #query the httk database
-      httkSearch(physchem_data())
+      httkSearch(physchem_data(),CAS_DTXSID(), info = data())
     })
-    
+
     httk_data <- eventReactive(input$search_exp, {
         #query the httk database
-        httkSearch(physchem_data())
+        httkSearch(physchem_data(),CAS_DTXSID(), info = data())
     })
+    
     
     httk_exp_data <- eventReactive(input$search_exp, {
         #incorporate findings from experimental data
@@ -622,13 +709,9 @@ server <- function(input, output, session) {
                       experimental_data_directory = file2$datapath,
                       CL_threshold = input$CL_thresh,
                       BP_threshold = input$BP_thresh,
-                      fu_threshold = input$fu_thresh,
-                      mean_flag = 0)
+                      fu_threshold = input$fu_thresh, 
+                      mean_flag = input$exp_mean_flag)
     })
-    
-    # observe({
-    #   your_global_variable <<- httk_exp_data()
-    # })
     
     #check if the experimental data is incorporated
     experimental_data<-eventReactive(c(input$search_exp,input$search_httk_db),{
@@ -640,6 +723,7 @@ server <- function(input, output, session) {
         
       }
     })
+    
     
     #only if the experimental data has been collected, does the simulate button appear
     output$simulate_check<-reactive(!is.null(experimental_data()))
@@ -672,11 +756,12 @@ server <- function(input, output, session) {
       #organise the physiochemical and experimental data
       OrganiseInputData(experimental_data(), Vss_method = input$pred_method,
                         Input_Dose = input$dose_value, UNITS = input$dose_units,
-                        info = data())
+                        info = data(), admin_route = input$administration_route)
+
     })
     
     predicted_variables <- eventReactive(input$predict_params_button,{
-      #Get predicted for fu, BP and Vss
+      #Get predicted for fu, BP, Vss and Kd
       PredictParameters(organised_data())
     })
     
@@ -700,7 +785,11 @@ server <- function(input, output, session) {
     output_profiles <- eventReactive(input$simulate_button, {
       #Run the simulations through Simcyp
       SimcypSimulation(organised_data(), subjects = input$subjects, #,trials = input$trials
-                       Time = input$sim_time)
+                       Time = as.numeric(input$sim_time))
+    })
+    
+    observe({
+      obs_data <<- output_profiles()
     })
     
     simcyp_outputs <- eventReactive(input$simulate_button, {
@@ -713,6 +802,7 @@ server <- function(input, output, session) {
       suppressWarnings(SummaryOutputs(simcyp_outputs()))
     })
     
+    #generate the compound codes after hitting the simulate button
     compound_codes <- eventReactive(input$simulate_button, {
       
       #identify the compound codes
@@ -723,6 +813,20 @@ server <- function(input, output, session) {
       names(compound_codes_list)<-codes
       
       return(compound_codes_list)
+      
+    })
+    
+    #generate the tissue types after hitting the simulate button
+    tissue_types <- eventReactive(input$simulate_button, {
+      
+      #identify the compound codes
+      tissues<- extract_tissue(output_profiles())
+      
+      #convert tissues to a list
+      tissue_list<-as.list(tissues)
+      names(tissue_list)<- tissues
+      
+      return(tissue_list)
       
     })
     
@@ -774,9 +878,15 @@ server <- function(input, output, session) {
                   choices = compound_codes())
     })
     
+    output$tissue_lists<- renderUI({
+      #generate drop_down lists of compound codes
+      selectInput('tissue', 'Tissue Type',
+                  choices = tissue_types(), selected = 'PLASMA')
+    })
+    
     output$conc_time_plot <- renderPlot({
-      plot_profile(input$comp_code, output_profiles(),
-           units=input$unit, curated_data = physchem_data(), 
+      plot_profile(input$comp_code, output_profiles(), tissue_type = input$tissue,
+           units=input$unit, curated_data = experimental_data(), 
            logy = input$log_scale)
     })
     
@@ -791,7 +901,7 @@ server <- function(input, output, session) {
                       plot_type = input$plot_type,
                       x_variable = input$x_axis_var,
                       y_variable = input$y_axis_var,
-                      background_color = input$plot_col)
+                      chosen_col = input$plot_col)
     })
     
     output$HelpPageText <- renderUI ({
@@ -805,42 +915,3 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui = ui, server = server)
-
-# timelineBlock(
-#   reversed = FALSE,
-#   width = 12,
-#   timelineEnd(color = "red"),
-#   timelineLabel(2018, color = "teal"),
-#   timelineItem(
-#     title = "Item 1",
-#     color = "olive",
-#     time = "now",
-#     footer = "Here is the footer",
-#     "This is the body"
-#   ),
-#   timelineItem(
-#     title = "Item 2",
-#     border = FALSE
-#   ),
-#   timelineLabel(2015, color = "orange"),
-#   timelineItem(
-#     title = "Item 3",
-#     icon = icon("paint-brush"),
-#     color = "maroon",
-#     timelineItemMedia(image = "https://placehold.it/150x100"),
-#     timelineItemMedia(image = "https://placehold.it/150x100")
-#   ),
-#   timelineStart(color = "purple")
-# ),
-
-# p("p creates a paragraph of text."),
-# p("A new p() command starts a new paragraph. Supply a style attribute to change the format of the entire paragraph.", style = "font-family: 'times'; font-si16pt"),
-# strong("strong() makes bold text."),
-# em("em() creates italicized (i.e, emphasized) text."),
-# br(),
-# code("code displays your text similar to computer code"),
-# div("div creates segments of text with a similar style. This division of text is all blue because I passed the argument 'style = color:blue' to div", style = "color:blue"),
-# br(),
-# p("span does the same thing as div, but it works with",
-#   span("groups of words", style = "color:blue"),
-#   "that appear inside a paragraph.")

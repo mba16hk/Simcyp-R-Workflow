@@ -1,8 +1,3 @@
-#load relevant libraries
-library(XLConnect)
-library(tools)
-library(dplyr)
-
 #import all additional functions
 setwd(dirname(rstudioapi::getSourceEditorContext()$path))
 source('additional_functions.R')
