@@ -97,7 +97,7 @@ SusdatSearch <- function (info, nf_in_chembl, ChEMBL_search, logP_selection_flag
   
   if (length(keep_df_cols(info,c('DOSE','DOSEUNITS','VSSMETHOD'))) > 0){
     found_in_susdat <- merge(found_in_susdat, 
-                          keep_df_cols(info,c('Code','InChiKey','DOSE','DOSEUNITS','VSSMETHOD')), 
+                          keep_df_cols(info,c('InChiKey','DOSE','DOSEUNITS','VSSMETHOD')), 
                           by.x = 'StdInChIKey', by.y = 'InChiKey', all.x = T)
   }
   

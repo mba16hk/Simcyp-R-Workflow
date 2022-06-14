@@ -11,6 +11,7 @@ setwd(dirname(rstudioapi::getSourceEditorContext()$path))
 source('input_query.R')
 source('chembl_search.R')
 source('susdat_search.R')
+source('Additional_data.R')
 source('ACD_Labs.R')
 source('httk_search.R')
 source('experimental_data_search.R')
@@ -64,10 +65,30 @@ ui <- dashboardPage( skin = 'black',
                       conditionalPanel(
                         condition = "input.search_physchem > 0",
                         
-                        #see if the user wants to provide experimental data
-                        tipify(checkboxInput("include_exp_data", "Provide Experimental Data", FALSE),
-                               "Checking the box would allow upload of experimental data.",
+                        tipify(checkboxInput("obach_data", "Obach 2008", TRUE),
+                               "Contains fu and systemic clearance data",
                                placement="bottom", trigger = "hover"),
+                        
+                        tipify(checkboxInput("wambaugh_data", "Wambaugh 2019", TRUE),
+                               "contains fu and CLint data",
+                               placement="bottom", trigger = "hover"),
+                        
+                        tipify(checkboxInput("chemphys_data", "In vitro database", TRUE),
+                               "contains fu, CLint and BP ratio data",
+                               placement="bottom", trigger = "hover"),
+                        
+                        selectInput('fu_op', 'Fu Operation',
+                                    choices = list('Arithmetic Mean'= 'arithmetic mean',
+                                                   'Geometric Mean'='geometric mean',
+                                                   'Median'= 'median',
+                                                   'Minimum'= 'minimum',
+                                                   'Maximum'= 'maximum')),
+                        
+                        selectInput('clint_op', 'CLint Operation',
+                                    choices = list('Arithmetic Mean'= 'arithmetic mean',
+                                                   'Geometric Mean'='geometric mean',
+                                                   'Minimum'= 'minimum',
+                                                   'Maximum'= 'maximum')),
                         
                         conditionalPanel(
                           condition = "input.include_exp_data == 0",
@@ -77,9 +98,16 @@ ui <- dashboardPage( skin = 'black',
                                               icon = icon('search'),
                                               style = 'color: #fff; 
                            background-color: #a44f2e; border-color: #8a2b07'),
-                                 "Searches 3 HTTK databases for any experimental data.",
+                                 "Search httk databases for any experimental data.",
                                  placement="bottom", trigger = "hover")
+                          
+                          
                         ),
+                        
+                        #see if the user wants to provide experimental data
+                        tipify(checkboxInput("include_exp_data", "Provide Experimental Data", FALSE),
+                               "Checking the box would allow upload of experimental data.",
+                               placement="bottom", trigger = "hover"),
                         
                         conditionalPanel(
                           condition = "input.include_exp_data > 0",
@@ -155,20 +183,20 @@ ui <- dashboardPage( skin = 'black',
                       
                       #some information for the user
                       p("Idea: The CSV file can be optionally imported into ACD/Labs
-                        for additional physiochemical data. You may proceed without uploading ACD data."),
+                        for additional physiochemical data. You may proceed without uploading any additional data."),
                       
                       #check if the user would like to upload information they manually collected from ACD labs
-                      checkboxInput("upload_ACD_labs", "I wish to upload ACD Labs data", FALSE),
+                      checkboxInput("upload_ACD_labs", "I wish to upload additional physchem data", FALSE),
                     
                       #allow user to upload the file form ACD labs if they choose to.
                       conditionalPanel(
                         condition = "input.upload_ACD_labs > 0",
                                        fileInput('file3', 
-                                                 'Upload ACD Labs Data',
+                                                 'Upload Additional Physchem Data',
                                                  buttonLabel=list(icon("folder"),"Browse"),
                                                  multiple = F),
                                        actionButton('refresh_physchem',
-                                                    'Incorporate ACD Data',
+                                                    'Incorporate Additional Data',
                                                     icon = icon('table'),
                                                     style = 'color: #fff; 
                            background-color: #a44f2e; border-color: #8a2b07')),
@@ -322,19 +350,30 @@ ui <- dashboardPage( skin = 'black',
                             )
                         ),
                         
-                        conditionalPanel(
-                          condition = "output.simulate_check",
-                          #Set some of simcyp's simulation parameters
-                          tipify(actionButton("simulate_button",
-                                              label = "Simulate",
-                                              icon = icon('laptop-code'),
-                                              style = 'color: #fff;
+                        fluidRow(
+                          
+                          column(
+                            width = 4,
+                            #see if the user wants to include compounds with missing information
+                            tipify(checkboxInput("set_seed", "Set seed", TRUE),
+                                   "Unchecking would not set a seed for the simulations.",
+                                   placement="bottom", trigger = "hover"),
+                          ),
+                          
+                          conditionalPanel(
+                            condition = "output.simulate_check",
+                            #Set some of simcyp's simulation parameters
+                            tipify(actionButton("simulate_button",
+                                                label = "Simulate",
+                                                icon = icon('laptop-code'),
+                                                style = 'color: #fff;
                                      background-color: #a44f2e; 
                                      border-color: #8a2b07'),#end of action button
-                                 "Simulate all compounds in the Simcyp Simulator.",
-                                 placement="top", trigger = "hover")
+                                   "Simulate all compounds in the Simcyp Simulator.",
+                                   placement="top", trigger = "hover")
+                          )
+                          
                         ),
-
 
                         width = 9) #end of box
           
@@ -617,7 +656,7 @@ server <- function(input, output, session) {
 
     nf_compounds <- eventReactive(c(input$search_physchem, input$include_compounds),{
         #extract the compounds not found in susdat
-      ACD_inputs(data(), not_found_in_chembl(), sus_data(), missing_info = input$include_compounds)
+      MissingInformation(data(), not_found_in_chembl(), sus_data(), missing_info = input$include_compounds)
     })
     
     output$ACDLabs_box<-reactive(!is.null(nf_compounds()))
@@ -692,12 +731,14 @@ server <- function(input, output, session) {
 
     httk_only_data <- eventReactive(input$search_httk_db,{
       #query the httk database
-      httkSearch(physchem_data(),CAS_DTXSID(), info = data())
+      httkSearch(physchem_data(),CAS_DTXSID(), info = data(), fu_operation = input$fu_op, CLint_operation = input$clint_op,
+                 obach = input$obach_data, wambaugh = input$wambaugh_data, chem_phys_in_vitro = input$chemphys_data)
     })
 
     httk_data <- eventReactive(input$search_exp, {
         #query the httk database
-        httkSearch(physchem_data(),CAS_DTXSID(), info = data())
+        httkSearch(physchem_data(),CAS_DTXSID(), info = data(), fu_operation = input$fu_op, CLint_operation = input$clint_op,
+                   obach = input$obach_data, wambaugh = input$wambaugh_data, chem_phys_in_vitro = input$chemphys_data)
     })
     
     
@@ -785,7 +826,7 @@ server <- function(input, output, session) {
     output_profiles <- eventReactive(input$simulate_button, {
       #Run the simulations through Simcyp
       SimcypSimulation(organised_data(), subjects = input$subjects, #,trials = input$trials
-                       Time = as.numeric(input$sim_time))
+                       Time = as.numeric(input$sim_time), seed = input$set_seed)
     })
     
     observe({

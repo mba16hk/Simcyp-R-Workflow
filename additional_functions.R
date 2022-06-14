@@ -165,26 +165,31 @@ determine_line <- function(longstrings){
 
 #function to determine the units of the Simcyp output parameters
 determine_units <- function(parameter){
+  
+  require(stringr)
+  
   if (parameter == 'Age'){
     return('(years)')
   } else if (parameter == 'BW'){
     return('(kg)')
   } else if (parameter == 'BSA'){
     return('(m^2)')
-  } else if (parameter == 'Cmax'){
+  } else if (str_detect(parameter,'Cmax')){
     return('(mg/L)')
   } else if (parameter == 'Tmax'){
-    return('(hours)')
+    return('(hr)')
   } else if (parameter == 'GFR'){
     return('(mL/min/1.73m^2)')
   } else if (parameter == 'Vss'){
     return('(L/kg)')
   } else if (parameter == 'Ka'){
-    return('(1/h)')
+    return('(1/hr)')
   } else if (parameter == 'AUC' | parameter == 'AUCinf'){
-    return('(mg*h/L)')
+    return('(mg*hr/L)')
   } else if (parameter == 'HalfLife'){
-    return('(hours)')
+    return('(hr)')
+  } else if (str_detect(parameter,'CL')){
+    return('(L/hr)')
   } else {
     return(' ')
   }
