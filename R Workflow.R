@@ -125,7 +125,21 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time) {
     Simcyp::SetCompoundParameter(CompoundParameterID$pKa1 ,CompoundID$Substrate, as.numeric(info$pKa1))
     message("BASIC. THEREFORE, pKa  SET.")
     
-  } else { #Compound could be ampholyte or a diprotic acid/base, therefore 2 pKas required
+  } else if (info$Compound_type== "Diprotic base"){
+    Simcyp::SetCompoundParameter(CompoundParameterID$CompoundType,CompoundID$Substrate, 1L )
+    # AND
+    Simcyp::SetCompoundParameter(CompoundParameterID$pKa1 ,CompoundID$Substrate, as.numeric(info$pKa1))
+    Simcyp::SetCompoundParameter(CompoundParameterID$pKa2 ,CompoundID$Substrate, as.numeric(info$pKa2))
+    message("Diprotic Base THEREFORE, 2 pKa values SET.")
+    
+  } else if (info$Compound_type== "Diprotic acid"){
+    Simcyp::SetCompoundParameter(CompoundParameterID$CompoundType,CompoundID$Substrate, 0L )
+    # AND
+    Simcyp::SetCompoundParameter(CompoundParameterID$pKa1 ,CompoundID$Substrate, as.numeric(info$pKa1))
+    Simcyp::SetCompoundParameter(CompoundParameterID$pKa2 ,CompoundID$Substrate, as.numeric(info$pKa2))
+    message("Diprotic Acid THEREFORE, 2 pKa values SET.")
+    
+  }else { #Compound is an ampholyte, therefore 2 pKas required
     
     #in this case we assume compound is ampholytic
     Simcyp::SetCompoundParameter(CompoundParameterID$CompoundType,CompoundID$Substrate, 5L )
@@ -184,7 +198,7 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time) {
   
 }
 
-SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects, Time){
+SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects, Time, seed = T){
   
   # Initialize data frames to store results 
   Output<- NULL
@@ -211,7 +225,10 @@ SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects,
     DBfilepath <- file.path(path_user, DBfilename) 
     
     # Run simulation, suppress all console output 
-    SetParameter("idSeedVariable", 3, 0, 4) #seed 0
+    if (seed == T){
+      SetParameter("idSeedVariable", 3, 0, 4) #seed 0
+    }
+    
     capture.output(Simcyp::Simulate(database=DBfilepath), file='NUL')  
     message( paste("Simulation Complete for ", Data$CS_code) )
     
@@ -222,7 +239,7 @@ SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects,
   
 }
 
-SimcypSimulation <- function (organised_data, trials = 1, subjects, Time){
+SimcypSimulation <- function (organised_data, trials = 1, subjects, Time, seed = T){
   
   #Intialise the system files path
   Simcyp::Initialise("C:\\Program Files\\Simcyp Simulator V21\\Screens\\SystemFiles",
@@ -260,14 +277,14 @@ SimcypSimulation <- function (organised_data, trials = 1, subjects, Time){
   
   if (nrow(Mechkim != 0)){
     simulated_data_MechKim <- SimulateWorkspace(Mechkim, SimcypWksz[1], 
-                                                path_user, trials, subjects, Time)
+                                                path_user, trials, subjects, Time, seed = T)
   }else{
     simulated_data_MechKim <- data.frame()
   }
   
   if (nrow(NonMechkim != 0)){
     simulated_data_NonMechKim <- SimulateWorkspace(NonMechkim, SimcypWksz[2], 
-                                                   path_user, trials, subjects, Time)
+                                                   path_user, trials, subjects, Time, seed = T)
   }else{
     simulated_data_NonMechKim <- data.frame()
   }
@@ -402,8 +419,11 @@ extract_info <- function(info_to_extract){
   Fu_plasma <- GetAllCompoundResults_DB('idfuAdj', compound = CompoundID$Substrate, info_to_extract)
   Ka<- GetAllCompoundResults_DB('idkaAdj',compound = CompoundID$Substrate, info_to_extract) #absorption rate constant (1/h)
   BP <- GetAllCompoundResults_DB('idbpAdj', compound = CompoundID$Substrate, info_to_extract) # BP ratio
+  CLtot <- GetAllCompoundResults_DB('idCLtot', compound = CompoundID$Substrate, info_to_extract) # Systemic Blood clearance (L/h)
+  CLH <- GetAllCompoundResults_DB('idCLintH', compound = CompoundID$Substrate, info_to_extract) # Total hepatic Clint (L/h)
+  CLR <- GetAllCompoundResults_DB('idCLintR', compound = CompoundID$Substrate, info_to_extract) # Total Renal Clint (L/h)
   
-  data_from_dB<-cbind(AUC_data,BSA,Age,BW,GFR,Vss,Fg,Fh,Fa,Fu_plasma,Ka,BP)
+  data_from_dB<-cbind(AUC_data,BSA,Age,BW,GFR,Vss,Fg,Fh,Fa,Fu_plasma,Ka,BP,CLtot,CLH,CLR)
   
   rmv <- c('ProfileIndex','Inhibition','DiffStoreIndex','Dose',
            'StartTime','EndTime','Tmin','Cmin','Cmax', 'AUCt_full',
