@@ -1,41 +1,4 @@
-# Script containing functions related to ACD labs inputs and outputs
-
-#function that returns list of compounds with missing info 
-ACD_inputs <- function(info, not_found_chembl,episuite_data, missing_info = T){
-  
-  if (missing_info == T){
-    
-    missing_PSA <- which(is.na(episuite_data$PSA))
-    missing_HBD <- which(is.na(episuite_data$HBD))
-    both_missing <- unique(c(missing_HBD,missing_PSA))
-    
-    not_found_compounds<-NotFoundInsusdat(not_found_chembl, episuite_data)
-    not_found_compounds$Status <- 'Missing Compound'
-    #get inchi of missing compounds
-    
-    missing_inchi<-episuite_data$InChIKey[both_missing]
-    #missing_codes <- episuite_data$Code[both_missing]
-    
-    compounds_with_missing_info <- filter(info,info$InChiKey %in% missing_inchi)
-    compounds_with_missing_info <- keep_df_cols(compounds_with_missing_info,
-                                                c('Code', 'SMILES'))
-    compounds_with_missing_info$Status <- 'Missing Infomation'
-    missing_and_nf_compounds<-rbind(compounds_with_missing_info, not_found_compounds)
-    missing_and_nf_compounds <- missing_and_nf_compounds %>% relocate(Status, .before = Code)
-
-    return(missing_and_nf_compounds)
-    
-  } else {
-    
-    missing_compounds <- NotFoundInsusdat(not_found_chembl, episuite_data)
-    missing_compounds$Status <- 'Missing Compound'
-    missing_compounds <- missing_compounds %>% relocate(Status, .before = Code)
-    
-    return(missing_compounds)
-    
-  }
-  
-}
+# Script containing functions related to ACD labs
 
 #extract important data from ACD Labs outputs and incorporate with remaining physiochemical information
 ACD_outputs <- function (info, ACD_data_directory, epi_data){

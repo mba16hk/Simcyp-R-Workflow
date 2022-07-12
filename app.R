@@ -11,6 +11,7 @@ setwd(dirname(rstudioapi::getSourceEditorContext()$path))
 source('input_query.R')
 source('chembl_search.R')
 source('susdat_search.R')
+source('Additional_data.R')
 source('ACD_Labs.R')
 source('httk_search.R')
 source('experimental_data_search.R')
@@ -64,10 +65,30 @@ ui <- dashboardPage( skin = 'black',
                       conditionalPanel(
                         condition = "input.search_physchem > 0",
                         
-                        #see if the user wants to provide experimental data
-                        tipify(checkboxInput("include_exp_data", "Provide Experimental Data", FALSE),
-                               "Checking the box would allow upload of experimental data.",
+                        tipify(checkboxInput("obach_data", "Obach 2008", TRUE),
+                               "Contains fu and systemic clearance data",
                                placement="bottom", trigger = "hover"),
+                        
+                        tipify(checkboxInput("wambaugh_data", "Wambaugh 2019", TRUE),
+                               "contains fu and CLint data",
+                               placement="bottom", trigger = "hover"),
+                        
+                        tipify(checkboxInput("chemphys_data", "In vitro database", TRUE),
+                               "contains fu, CLint and BP ratio data",
+                               placement="bottom", trigger = "hover"),
+                        
+                        selectInput('fu_op', 'Fu Operation',
+                                    choices = list('Arithmetic Mean'= 'arithmetic mean',
+                                                   'Geometric Mean'='geometric mean',
+                                                   'Median'= 'median',
+                                                   'Minimum'= 'minimum',
+                                                   'Maximum'= 'maximum')),
+                        
+                        selectInput('clint_op', 'CLint Operation',
+                                    choices = list('Arithmetic Mean'= 'arithmetic mean',
+                                                   'Geometric Mean'='geometric mean',
+                                                   'Minimum'= 'minimum',
+                                                   'Maximum'= 'maximum')),
                         
                         conditionalPanel(
                           condition = "input.include_exp_data == 0",
@@ -77,9 +98,16 @@ ui <- dashboardPage( skin = 'black',
                                               icon = icon('search'),
                                               style = 'color: #fff; 
                            background-color: #a44f2e; border-color: #8a2b07'),
-                                 "Searches 3 HTTK databases for any experimental data.",
+                                 "Search httk databases for any experimental data.",
                                  placement="bottom", trigger = "hover")
+                          
+                          
                         ),
+                        
+                        #see if the user wants to provide experimental data
+                        tipify(checkboxInput("include_exp_data", "Provide Experimental Data", FALSE),
+                               "Checking the box would allow upload of experimental data.",
+                               placement="bottom", trigger = "hover"),
                         
                         conditionalPanel(
                           condition = "input.include_exp_data > 0",
@@ -150,25 +178,25 @@ ui <- dashboardPage( skin = 'black',
                                "Unchecking would return a CSV of compounds not found at all.",
                                placement="bottom", trigger = "hover"),
                         
-                        #output a table of missing compounds based on user preferences
+                      #output a table of missing compounds based on user preferences
                       dataTableOutput("TBL6"),
                       
                       #some information for the user
                       p("Idea: The CSV file can be optionally imported into ACD/Labs
-                        for additional physiochemical data. You may proceed without uploading ACD data."),
+                        for additional physiochemical data. You may proceed without uploading any additional data."),
                       
                       #check if the user would like to upload information they manually collected from ACD labs
-                      checkboxInput("upload_ACD_labs", "I wish to upload ACD Labs data", FALSE),
+                      checkboxInput("upload_ACD_labs", "I wish to upload additional physchem data", FALSE),
                     
                       #allow user to upload the file form ACD labs if they choose to.
                       conditionalPanel(
                         condition = "input.upload_ACD_labs > 0",
                                        fileInput('file3', 
-                                                 'Upload ACD Labs Data',
+                                                 'Upload Additional Physchem Data',
                                                  buttonLabel=list(icon("folder"),"Browse"),
                                                  multiple = F),
                                        actionButton('refresh_physchem',
-                                                    'Incorporate ACD Data',
+                                                    'Incorporate Additional Data',
                                                     icon = icon('table'),
                                                     style = 'color: #fff; 
                            background-color: #a44f2e; border-color: #8a2b07')),
@@ -213,6 +241,16 @@ ui <- dashboardPage( skin = 'black',
                                     width = 12)),
                     width = 12
                   ), #end of tabbox
+                  collapsible = TRUE), #end of box
+                
+                box(
+                  title = 'Out of Range Values for Peff Prediction',
+                  status = 'warning',
+                  width = 8,
+                  #some information for the user
+                  p("The Peff prediction method relies on PSA/HBS values. The models were calibrated for compounds with 60<MW<455, -3<logP<4, HBD<6 and 16.2<PSA<154.4. The following compounds have out of range parameters and may result in inaccurate predictions."),
+                  #output a table of missing compounds based on user preferences
+                  dataTableOutput("TBL_out_of_range"),
                   collapsible = TRUE) #end of box
                 ), # end of tabitem 1
         
@@ -247,19 +285,23 @@ ui <- dashboardPage( skin = 'black',
                     box(title = 'Simulation Parameters',
                         status = 'success',
                         height = 600,
-                        #solidHeader = TRUE,
-                            conditionalPanel(
-                              condition = "output.determine_inputs == 0 || output.determine_inputs == 1 ||output.determine_inputs == 2 || output.determine_inputs == 4",
-                              numericInput('pred_method',
-                                           'Vss Prediction Method',
-                                           3, min = 1, max = 3, step = 1)),
                           
+                        #Select single or multiple dosing
+                        radioButtons('dosing_options','Dosing Options', 
+                                     choices = c('Single Dosing',
+                                                 'Multiple Dosing'),
+                                     inline = T,
+                                     selected = F),
+                        
+                            #conditional panel for dose value
                             conditionalPanel(
                             condition = "output.determine_inputs == 0 || output.determine_inputs == 2 ||output.determine_inputs == 3 || output.determine_inputs == 5",
                             numericInput('dose_value',
                                          'Dose',
                                          100, min = 0, max = NA)),
-
+                        
+                        
+                            # conditional panel for dose units
                             conditionalPanel(
                               condition = "output.determine_inputs == 0 || output.determine_inputs == 1 ||output.determine_inputs == 3 || output.determine_inputs == 6",
                               selectInput('dose_units',
@@ -273,7 +315,7 @@ ui <- dashboardPage( skin = 'black',
                         fluidRow(
                           
                           column(
-                            width = 5,
+                            width = 4,
                             tipify(numericInput('acid_bp_ratio', 'Acid BP ratio', 0.55,
                                          min = 0.55, max = NA),
                                    "Acids without any BP ratio value are assumed to have this BP ratio",
@@ -282,12 +324,21 @@ ui <- dashboardPage( skin = 'black',
                           
                           
                           column(
-                            width = 5,
+                            width = 4,
                             tipify(numericInput('agp_threshold', 'pKa threshold for AGP binding to bases', 7,
                                          min = 5.5, max = 8.5),
                                    "Bases that have a pKa value higher than this threshold are assumed to bing to AGP",
                                    placement="bottom", trigger = "hover")
-                          )
+                          ),
+                          
+                          
+                          column(
+                            width = 4, conditionalPanel(
+                            condition = "output.determine_inputs == 0 || output.determine_inputs == 1 ||output.determine_inputs == 2 || output.determine_inputs == 4",
+                            numericInput('pred_method',
+                                         'Vss Prediction Method',
+                                         3, min = 1, max = 3, step = 1))),
+                          
                         ),
                         
                         p('Trial Design:'),
@@ -296,14 +347,12 @@ ui <- dashboardPage( skin = 'black',
                           column(
                             width = 4,
                             numericInput('subjects', ' Subjects', 10,
-                                         min = 1, max = NA, step = 1)
+                                         min = 1, max = NA, step = 1),
+                            tipify(checkboxInput("set_additional_subject_design", "Specify additional subject parameters", FALSE),
+                                   "Checking would allow setting more subject design parameters.",
+                                   placement="bottom", trigger = "hover")
                           ),
-                          
-                          # column(
-                          #   width = 3,
-                          #   numericInput('trials', 'Trials', 1,
-                          #                min = 1, max = 100, step = 1)
-                          # ),
+                    
                           
                           column(
                             width = 4,
@@ -322,23 +371,119 @@ ui <- dashboardPage( skin = 'black',
                             )
                         ),
                         
-                        conditionalPanel(
-                          condition = "output.simulate_check",
-                          #Set some of simcyp's simulation parameters
-                          tipify(actionButton("simulate_button",
-                                              label = "Simulate",
-                                              icon = icon('laptop-code'),
-                                              style = 'color: #fff;
+                        fluidRow(
+                          
+                          column(
+                            width = 4,
+                            #see if the user wants to include compounds with missing information
+                            tipify(checkboxInput("set_seed", "Set seed", TRUE),
+                                   "Unchecking would not set a seed for the simulations.",
+                                   placement="bottom", trigger = "hover"),
+                          ),
+                          
+                          conditionalPanel(
+                            condition = "output.simulate_check",
+                            #Set some of simcyp's simulation parameters
+                            tipify(actionButton("simulate_button",
+                                                label = "Simulate",
+                                                icon = icon('laptop-code'),
+                                                style = 'color: #fff;
                                      background-color: #a44f2e; 
                                      border-color: #8a2b07'),#end of action button
-                                 "Simulate all compounds in the Simcyp Simulator.",
-                                 placement="top", trigger = "hover")
+                                   "Simulate all compounds in the Simcyp Simulator.",
+                                   placement="top", trigger = "hover")
+                          )
+                          
                         ),
 
-
-                        width = 9) #end of box
+                        width = 8), #end of box
+                    
+                    conditionalPanel(
+                      condition = "input.set_additional_subject_design == 1",
+                      box(
+                        title = 'Subject Design',
+                        status = 'primary',
+                        width = 4,
+                        fluidRow(
+                          
+                          #inputs for minimum age
+                          column(
+                            width = 12,
+                            sliderInput('age_range', 'Age Range', 
+                                        min = 18, max = 65, value = c(20,50), step = 1)
+                          ), #end of column
+                          
+                          #proportion of females
+                          column(
+                            width = 12,
+                            numericInput('female_prop', 'Female Proportion',
+                                         value = 0.5, min = 0, max = 1)
+                          ) #end of column
+                        ) #end of fluidrow
+                      ) #end of box
+                    ),#end of conditional panel
+                    
+                    conditionalPanel(
+                      condition = "input.administration_route == 'Dermal'",
+                      box(
+                        title = 'Dermal Parameters',
+                        status = 'primary',
+                        width = 4,
+                        fluidRow(
+                          
+                          #inputs for dermal area
+                          column(
+                            width = 12,
+                            numericInput('dermal_area_val', 'Area of Application (cm^2)', 
+                                        min = 1, max = 500, value = 100, step = 0.5)
+                          ), #end of column
+                          
+                          # inputs for formulation thickness
+                          column(
+                            width = 12,
+                            numericInput('dermal_formulation_thickness', 'Formulation Thickness (cm)',
+                                         value = 0.005, min = 0.005, max = 0.1)
+                          ), #end of column
+                          
+                          # inputs for formulation density
+                          column(
+                            width = 12,
+                            numericInput('dermal_formulation_density', 'Formulation Density (g/mL)',
+                                         value = 1, min = 0.05, max = 4)
+                          ) #end of column
+                          
+                        ) #end of fluidrow
+                      ) #end of box
+                    ),#end of conditional panel
           
                   ),# end of fluidrow
+
+                
+                conditionalPanel(
+                  condition = "input.dosing_options == 'Multiple Dosing'",
+                  box(
+                    title = 'Multiple Dosing Options',
+                    status = 'primary',
+                    width = 8,
+                    fluidRow(
+                      
+                      #inputs for number of doses
+                      column(
+                        width = 6,
+                        numericInput('num_doses_val', 'Number of doses', 
+                                     min = 1, max = 1000, value = 2, step = 1)
+                      ), #end of column
+                      
+                      # inputs for dosing interval
+                      column(
+                        width = 6,
+                        numericInput('dosing_interval_val', 'Dosing Interval (hrs)',
+                                     value = 12, min = 0.001, max = 48)
+                      ) #end of column
+                      
+                    ) #end of fluidrow
+                  ) #end of box
+                ),#end of conditional panel
                 
                 box(
                   title = 'Simcyp Output Tables',
@@ -617,7 +762,7 @@ server <- function(input, output, session) {
 
     nf_compounds <- eventReactive(c(input$search_physchem, input$include_compounds),{
         #extract the compounds not found in susdat
-      ACD_inputs(data(), not_found_in_chembl(), sus_data(), missing_info = input$include_compounds)
+      MissingInformation(data(), not_found_in_chembl(), sus_data(), missing_info = input$include_compounds)
     })
     
     output$ACDLabs_box<-reactive(!is.null(nf_compounds()))
@@ -689,15 +834,39 @@ server <- function(input, output, session) {
 
       }
     })
+    
+    out_of_range_values <- eventReactive(input$search_physchem,{
+      #query the epi suite database
+      OutOfRange_PSA_HBD(physchem_data())
+    })
+    
+    output$TBL_out_of_range <- renderDataTable(out_of_range_values(),
+                                               rownames = FALSE,
+                                               extensions = list('Scroller' = NULL),
+                                               options = list(
+                                                 #deferRender = TRUE,
+                                                 #paging = TRUE,
+                                                 scroller = TRUE,
+                                                 scrollX = TRUE,
+                                                 scrollY = '300px',
+                                                 searching = TRUE,
+                                                 fixedColumns = TRUE,
+                                                 autoWidth = FALSE,
+                                                 #ordering = TRUE,
+                                                 scrollCollapse= TRUE,
+                                                 dom = 'tB'
+                                               )) 
 
     httk_only_data <- eventReactive(input$search_httk_db,{
       #query the httk database
-      httkSearch(physchem_data(),CAS_DTXSID(), info = data())
+      httkSearch(physchem_data(),CAS_DTXSID(), info = data(), fu_operation = input$fu_op, CLint_operation = input$clint_op,
+                 obach = input$obach_data, wambaugh = input$wambaugh_data, chem_phys_in_vitro = input$chemphys_data)
     })
 
     httk_data <- eventReactive(input$search_exp, {
         #query the httk database
-        httkSearch(physchem_data(),CAS_DTXSID(), info = data())
+        httkSearch(physchem_data(),CAS_DTXSID(), info = data(), fu_operation = input$fu_op, CLint_operation = input$clint_op,
+                   obach = input$obach_data, wambaugh = input$wambaugh_data, chem_phys_in_vitro = input$chemphys_data)
     })
     
     
@@ -782,10 +951,32 @@ server <- function(input, output, session) {
                                      buttons = c('csv', 'excel')
                                    ))
     
+    multiple_dosing_flag <- eventReactive(input$simulate_button, {
+      if (input$dosing_options == 'Multiple Dosing'){
+        return(T)
+      }
+    })
+    
     output_profiles <- eventReactive(input$simulate_button, {
       #Run the simulations through Simcyp
       SimcypSimulation(organised_data(), subjects = input$subjects, #,trials = input$trials
-                       Time = as.numeric(input$sim_time))
+                       Time = as.numeric(input$sim_time), seed = input$set_seed,
+                       
+                       #set subject parameters
+                       MinAge = min(as.numeric(input$age_range)), 
+                       MaxAge = max(as.numeric(input$age_range)), 
+                       Prop_females = input$female_prop,
+                       
+                       #dermal values
+                       dermal_area = input$dermal_area_val, 
+                       formulation_thickness = input$dermal_formulation_thickness, 
+                       formulation_density = input$dermal_formulation_density,
+                       
+                       #multiple dosing options
+                       multiple_dosing = multiple_dosing_flag(), 
+                       Num_doses = as.numeric(input$num_doses_val), 
+                       dose_interval = as.numeric(input$dosing_interval_val)
+                       )
     })
     
     observe({

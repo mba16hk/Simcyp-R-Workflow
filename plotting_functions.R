@@ -2,7 +2,7 @@ library(ggplot2)
 library(scales)
 
 # Function from plotting conc-time profiles for each compound
-plot_profile <- function(casestudy_ID, Output, tissue_type = 'PLASMA' ,units = 'ng/mL', curated_data, logy=F){
+plot_profile <- function(casestudy_ID, Output, tissue_type = 'PLASMA' ,units = 'ng/mL', curated_data, logy=F, compound_name = NA){
   
   require(ggplot2)
   require(scales)
@@ -33,7 +33,11 @@ plot_profile <- function(casestudy_ID, Output, tissue_type = 'PLASMA' ,units = '
   colnames(df)<-c('Sub','Times','Conc')
   
   #Create Title for plot
-  header<-paste(casestudy_ID, tissue_type,'Concentration-Time Profiles',sep=' ')
+  if (!is.na(compound_name)){
+    header<-paste(compound_name, tissue_type,sep=' ')
+  }else{
+    header<-paste(casestudy_ID, tissue_type,'Concentration-Time Profiles',sep=' ')
+  }
   
   if (units == 'ng/mL'){
     
@@ -83,6 +87,7 @@ plot_profile <- function(casestudy_ID, Output, tissue_type = 'PLASMA' ,units = '
     g1 <- ggplot(df, aes(x = Times, y = Conc, group = factor(Sub))) + geom_line(aes(color=factor(Sub)), size = 1, linetype = 1) 
     g1 <- g1 + xlab("Time (hours)") + ylab(ytitle)
     g1 + ggtitle(header) + 
+      #guides(colour=guide_legend(nrow=1))+
       labs(color  = "Subjects", linetype = 1)+ theme(
         plot.background = element_rect(fill = "white", colour = NA),
         panel.background = element_rect(fill = "white", colour = NA),
@@ -91,7 +96,7 @@ plot_profile <- function(casestudy_ID, Output, tissue_type = 'PLASMA' ,units = '
         panel.grid.major = element_line(color = "grey"),
         panel.grid.minor = element_line(color = "grey"),
         axis.text = element_text(colour = "black",size=12),
-        axis.title = element_text(colour = "black",size=14,face="bold")
+        axis.title = element_text(colour = "black",size=14,face="bold"),
       )
   }
   
@@ -99,7 +104,7 @@ plot_profile <- function(casestudy_ID, Output, tissue_type = 'PLASMA' ,units = '
 
 plot_parameters<-function(simcyp_outputs, Compound, 
                           plot_type = 'Distribution', x_variable, y_variable,
-                          chosen_col){
+                          chosen_col, compound_name = NA){
   require(ggplot2)
   #Extract data relationg to compound of interest
   compound_IDs<- names(simcyp_outputs)
@@ -112,9 +117,15 @@ plot_parameters<-function(simcyp_outputs, Compound,
   
   x_axis_label <- paste(x_variable,determine_units(x_variable), sep=' ')
   
+  if (!is.na(compound_name)){
+    header_comp_name <- compound_name
+  } else{
+    header_comp_name <- Compound
+  }
+  
   if (plot_type == 'Distribution'){
     #Create Title for plot
-    header<-paste(Compound,'Distribution of', x_variable, sep=' ')
+    header<-paste(header_comp_name,'Distribution of', x_variable, sep=' ')
     
     # Distributions are plotted as density plots (only x variable is considered)
     ggplot(outputs, aes(x=outputs[,x_col], colour= chosen_col, fill = chosen_col)) +
@@ -140,7 +151,7 @@ plot_parameters<-function(simcyp_outputs, Compound,
     cor_coeff<- round(cor(outputs[,x_col],outputs[,y_col]),2)
     
     #Create Title for plot
-    header<-paste(Compound,' Relationship between ', x_variable,' and ', y_variable,' (r = ',cor_coeff,')' ,sep='')
+    header<-paste(header_comp_name, x_variable,'vs.', y_variable,'(r =',cor_coeff,')' ,sep=' ')
     
     #relationships are scatter diagrams where x and y variables are needed
     g1 <- ggplot(outputs, aes(x = outputs[,x_col], y = outputs[,y_col]))
@@ -160,6 +171,7 @@ plot_parameters<-function(simcyp_outputs, Compound,
   
 }
 
+
 #cross-compound comparison plot
 compare_simulated_compound <- function(summary_simcyp, parameter, bar_order, bar_col){
   
@@ -168,6 +180,8 @@ compare_simulated_compound <- function(summary_simcyp, parameter, bar_order, bar
   
   df<-data.frame(compound_codes,parameters_to_plot)
   colnames(df)<-c('Compounds','parameter')
+  
+  df$parameter<-as.numeric(df$parameter)
   
   if(bar_order=='ascending'){
     df <- df[order(df$parameter),]
@@ -178,10 +192,13 @@ compare_simulated_compound <- function(summary_simcyp, parameter, bar_order, bar
   
   header<-paste('Mean',parameter,'Variation Across Simulated Compounds',sep=' ')
   
+  units <- determine_units(parameter)
+  ytitle <- paste(parameter,units,sep=' ')
+  
   ggplot(df, aes(x=Compounds, y= parameter)) +
     ylab(parameter)+
     geom_bar(stat="identity", colour = bar_col, fill = bar_col)+
-    ggtitle(header)+ 
+    ggtitle(header)+ ylab(ytitle)+
     scale_x_discrete(limits = df$Compounds) +
     theme(
       plot.background = element_rect(fill = "white", colour = NA),

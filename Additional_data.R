@@ -1,7 +1,46 @@
 #script to process and incorporate additional data to that queries from ChEMBL and susDat
+#users can upload their own data here which can override the already collected physchem data
+
+#function that returns list of compounds with missing info 
+MissingInformation <- function(info, not_found_chembl,episuite_data, missing_info = T){
+  
+  if (missing_info == T){
+    
+    missing_PSA <- which(is.na(episuite_data$PSA))
+    missing_HBD <- which(is.na(episuite_data$HBD))
+    both_missing <- unique(c(missing_HBD,missing_PSA))
+    
+    not_found_compounds<-NotFoundInsusdat(not_found_chembl, episuite_data)
+    not_found_compounds$Status <- 'Missing Compound'
+    #get inchi of missing compounds
+    
+    missing_inchi<-episuite_data$InChIKey[both_missing]
+    #missing_codes <- episuite_data$Code[both_missing]
+    
+    compounds_with_missing_info <- filter(info,info$InChiKey %in% missing_inchi)
+    compounds_with_missing_info <- keep_df_cols(compounds_with_missing_info,
+                                                c('Code', 'SMILES'))
+    compounds_with_missing_info$Status <- 'Missing Infomation'
+    missing_and_nf_compounds<-rbind(compounds_with_missing_info, not_found_compounds)
+    missing_and_nf_compounds <- missing_and_nf_compounds %>% relocate(Status, .before = Code)
+    
+    return(missing_and_nf_compounds)
+    
+  } else {
+    
+    missing_compounds <- NotFoundInsusdat(not_found_chembl, episuite_data)
+    missing_compounds$Status <- 'Missing Compound'
+    missing_compounds <- missing_compounds %>% relocate(Status, .before = Code)
+    
+    return(missing_compounds)
+    
+  }
+  
+}
 
 #extract important data from additional data and incorporate with remaining physchem info
-AdditionalData <- function (info, additional_data_directory, sus_data){
+AdditionalData <- function (info, additional_data_directory, sus_data,
+                            override_existing_data = F){
   
   
   #import the ACD labs datafile
@@ -33,40 +72,73 @@ AdditionalData <- function (info, additional_data_directory, sus_data){
              by.x = c('Code'), by.y = 'CODE', all= T)
   
   #Do not overwrite values extracted by susDat/chembl and copy over data
-  if ('MW' %in% colnames(additional_data)){
-    x$MW.x <- ifelse(!is.na(x$MW.y)&is.na(x$MW.x),
-                   x$MW.y, x$MW.x)
-  }
-  
-  if ('LOGP' %in% colnames(additional_data)){
-    x$logPow <- ifelse(!is.na(x$LOGP)&is.na(x$logPow),
-                       x$LOGP, x$logPow)
-  }
-  
-  if('HBD' %in% colnames(additional_data)){
-    x$HBD.x <- ifelse(!is.na(x$HBD.y)&is.na(x$HBD.x),
-                    x$HBD.y, x$HBD.x)
-  }
-  
-  if('PSA' %in% colnames(additional_data)){
-    x$PSA.x <- ifelse(!is.na(x$PSA.y)&is.na(x$PSA.x),
-                      x$PSA.y, x$PSA.x)
-  }
-  
-  if('PKA(ACID)' %in% colnames(additional_data)){
-    x$Acidic..pKa <- ifelse(!is.na(x$PKA(ACID))&is.na(x$Acidic..pKa),
+  if (override_existing_data == F){
+    
+    if ('MW' %in% colnames(additional_data)){
+      x$MW.x <- ifelse(!is.na(x$MW.y)&is.na(x$MW.x),
+                       x$MW.y, x$MW.x)
+    }
+    
+    if ('LOGP' %in% colnames(additional_data)){
+      x$logPow <- ifelse(!is.na(x$LOGP)&is.na(x$logPow),
+                         x$LOGP, x$logPow)
+    }
+    
+    if('HBD' %in% colnames(additional_data)){
+      x$HBD.x <- ifelse(!is.na(x$HBD.y)&is.na(x$HBD.x),
+                        x$HBD.y, x$HBD.x)
+    }
+    
+    if('PSA' %in% colnames(additional_data)){
+      x$PSA.x <- ifelse(!is.na(x$PSA.y)&is.na(x$PSA.x),
+                        x$PSA.y, x$PSA.x)
+    }
+    
+    if('PKA(ACID)' %in% colnames(additional_data)){
+      x$Acidic..pKa <- ifelse(!is.na(x$PKA(ACID))&is.na(x$Acidic..pKa),
                               x$PKA(ACID), x$Acidic..pKa)
-  }
-  
-  if('PKA(BASE)' %in% colnames(additional_data)){
-    x$Basic.pKa <- ifelse(!is.na(x$PKA(BASE))&is.na(x$Basic.pKa),
+    }
+    
+    if('PKA(BASE)' %in% colnames(additional_data)){
+      x$Basic.pKa <- ifelse(!is.na(x$PKA(BASE))&is.na(x$Basic.pKa),
                             x$PKA(BASE), x$Basic.pKa)
+    }
+    
+    if('TYPE' %in% colnames(additional_data)){
+      x$Compound.type <- ifelse(!is.na(x$TYPE)&is.na(x$Compound.type),
+                                x$TYPE, x$Compound.type)
+    }
+  } else if (override_existing_data == T){
+    
+    if ('MW' %in% colnames(additional_data)){
+      x$MW.x <- ifelse(!is.na(x$MW.y), x$MW.y, x$MW.x)
+    }
+    
+    if ('LOGP' %in% colnames(additional_data)){
+      x$logPow <- ifelse(!is.na(x$LOGP), x$LOGP, x$logPow)
+    }
+    
+    if('HBD' %in% colnames(additional_data)){
+      x$HBD.x <- ifelse(!is.na(x$HBD.y), x$HBD.y, x$HBD.x)
+    }
+    
+    if('PSA' %in% colnames(additional_data)){
+      x$PSA.x <- ifelse(!is.na(x$PSA.y),x$PSA.y, x$PSA.x)
+    }
+    
+    if('PKA(ACID)' %in% colnames(additional_data)){
+      x$Acidic..pKa <- ifelse(!is.na(x$PKA(ACID)), x$PKA(ACID), x$Acidic..pKa)
+    }
+    
+    if('PKA(BASE)' %in% colnames(additional_data)){
+      x$Basic.pKa <- ifelse(!is.na(x$PKA(BASE)),x$PKA(BASE), x$Basic.pKa)
+    }
+    
+    if('TYPE' %in% colnames(additional_data)){
+      x$Compound.type <- ifelse(!is.na(x$TYPE),x$TYPE, x$Compound.type)
+    }
   }
-  
-  if('TYPE' %in% colnames(additional_data)){
-    x$Compound.type <- ifelse(!is.na(x$TYPE)&is.na(x$Compound.type),
-                          x$TYPE, x$Compound.type)
-  }
+
   
   rmv_cols <- c('MW.y','LOGP','HBD.y','PSA.y','TYPE','PKA(BASE)','PKA(ACID)')
   x<- rm_df_cols(x,rmv_cols)
@@ -135,7 +207,7 @@ AdditionalData <- function (info, additional_data_directory, sus_data){
   y <- y %>% rename(SMILES = SMILES.x)
   
   #add the source as ACD Labs for missing PSA/HBD
-  y$data_source <- ifelse(is.na(y$data_source),'Additional Data',y$data_source)
+  y$data_source <- ifelse(is.na(y$data_source),"User's Additional Data",y$data_source)
   
   return(y)
   

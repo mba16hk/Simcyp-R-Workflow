@@ -64,18 +64,34 @@ OrganiseInputData <- function (httk_exp_data, info,
   httk_exp_data$Basic.pKa <- ifelse(httk_exp_data$Compound.type == 'NEUTRAL',
                                       NA, httk_exp_data$Basic.pKa)
   
-  #choose highest pKa for bases and lowest pKa for acids
+  #choose highest pKa for bases and lowest pKa for acids, classify diprotic and monoprotic acids and bases
   pKas<-data.frame(as.numeric(httk_exp_data$Acidic..pKa),
                    as.numeric(httk_exp_data$Basic.pKa))
   
   for (i in 1:nrow(httk_exp_data)){
-    if(httk_exp_data$Compound.type[i]=='BASE'){
+    if(httk_exp_data$Compound.type[i]=='BASE' & !is.na(pKas[i,1]) & !is.na(pKas[i,2])){
       
-      httk_exp_data$Acidic..pKa[i]<- max(pKas[i,],na.rm=T)
+      httk_exp_data$Compound.type[i]<- 'Diprotic base'
       
-    } else if(httk_exp_data$Compound.type[i]=='ACID'){
+    } else if(httk_exp_data$Compound.type[i]=='ACID' & !is.na(pKas[i,1]) & !is.na(pKas[i,2])){
       
-      httk_exp_data$Acidic..pKa[i]<- min(pKas[i,],na.rm=T)
+      httk_exp_data$Compound.type[i]<- 'Diprotic acid'
+      
+    } else if(httk_exp_data$Compound.type[i]=='ACID' & (is.na(pKas[i,1]) | is.na(pKas[i,2]))){
+      
+      httk_exp_data$Compound.type[i]<- 'Monoprotic acid'
+      
+    } else if(httk_exp_data$Compound.type[i]=='BASE' & (is.na(pKas[i,1]) | is.na(pKas[i,2]))){
+      
+      httk_exp_data$Compound.type[i]<- 'Monoprotic base'
+      
+    } else if (httk_exp_data$Compound.type[i]=='NEUTRAL'){
+      
+      httk_exp_data$Compound.type[i]<- 'Neutral'
+      
+    } else if (httk_exp_data$Compound.type[i]=='ZWITTERION'){
+      
+      httk_exp_data$Compound.type[i]<- 'Ampholyte'
       
     }
   }
@@ -115,25 +131,24 @@ OrganiseInputData <- function (httk_exp_data, info,
   
   CMPD_IMPORT$MW <- httk_exp_data$MWfreebase
   CMPD_IMPORT$logPow <- httk_exp_data$logPow
-  CMPD_IMPORT$cmpd_type <- httk_exp_data$Compound.type
-  CMPD_IMPORT$Compound_type <- NA
+  CMPD_IMPORT$Compound_type <- httk_exp_data$Compound.type
   
   #convert to names as in Simcyp
-  CMPD_IMPORT <- within(CMPD_IMPORT, {
-    n <- cmpd_type == "NEUTRAL"
-    b <- cmpd_type == "BASE"
-    a <- cmpd_type == "ACID"
-    z <- cmpd_type == "ZWITTERION"
-    
-    Compound_type[n] <- "Neutral"
-    Compound_type[b] <- "Monoprotic base"
-    Compound_type[a] <- "Monoprotic acid"
-    Compound_type[z] <- "Ampholyte"
-  })
+  # CMPD_IMPORT <- within(CMPD_IMPORT, {
+  #   n <- cmpd_type == "NEUTRAL"
+  #   b <- cmpd_type == "BASE"
+  #   a <- cmpd_type == "ACID"
+  #   z <- cmpd_type == "ZWITTERION"
+  #   
+  #   Compound_type[n] <- "Neutral"
+  #   Compound_type[b] <- "Monoprotic base"
+  #   Compound_type[a] <- "Monoprotic acid"
+  #   Compound_type[z] <- "Ampholyte"
+  # })
   
   #consider the addition of diprotic acids and bases based on the distinct pKas
   
-  CMPD_IMPORT <- rm_df_cols(CMPD_IMPORT,c('cmpd_type','z','a','b'))
+  #CMPD_IMPORT <- rm_df_cols(CMPD_IMPORT,c('cmpd_type','z','a','b'))
   
   CMPD_IMPORT$acidicpKa <- httk_exp_data$Acidic..pKa
   CMPD_IMPORT$basicpKa <- httk_exp_data$Basic.pKa
@@ -145,12 +160,16 @@ OrganiseInputData <- function (httk_exp_data, info,
   CMPD_IMPORT <- transform(CMPD_IMPORT, pKa1 = ifelse(Compound_type == "Monoprotic acid", acidicpKa, pKa1))
   CMPD_IMPORT <- transform(CMPD_IMPORT, pKa1 = ifelse(Compound_type == "Ampholyte", acidicpKa, pKa1))
   CMPD_IMPORT <- transform(CMPD_IMPORT, pKa2 = ifelse(Compound_type == "Ampholyte", basicpKa, pKa2))
+  CMPD_IMPORT <- transform(CMPD_IMPORT, pKa1 = ifelse(Compound_type == "Diprotic acid", acidicpKa, pKa1))
+  CMPD_IMPORT <- transform(CMPD_IMPORT, pKa2 = ifelse(Compound_type == "Diprotic acid", basicpKa, pKa2))
+  CMPD_IMPORT <- transform(CMPD_IMPORT, pKa1 = ifelse(Compound_type == "Diprotic base", acidicpKa, pKa1))
+  CMPD_IMPORT <- transform(CMPD_IMPORT, pKa2 = ifelse(Compound_type == "Diprotic base", basicpKa, pKa2))
   
   CMPD_IMPORT <- rm_df_cols(CMPD_IMPORT,c('n','acidicpKa','basicpKa'))
   
   if (!is.null(httk_exp_data$BP_value)){
     CMPD_IMPORT$BP_value <- httk_exp_data$BP_value
-    CMPD_IMPORT$BP_value <- ifelse(CMPD_IMPORT$Compound_type == "Monoprotic acid" &
+    CMPD_IMPORT$BP_value <- ifelse((CMPD_IMPORT$Compound_type == "Monoprotic acid" | CMPD_IMPORT$Compound_type == "Diprotic acid" )&
                                      is.na(CMPD_IMPORT$BP_value), BP_acids, CMPD_IMPORT$BP_value)
     
     CMPD_IMPORT$BP_type<- ifelse(CMPD_IMPORT$BP_value != 0 &
@@ -169,8 +188,26 @@ OrganiseInputData <- function (httk_exp_data, info,
   CMPD_IMPORT$quatN <- "No" ## ASSUMED! NEEDS A SOLUTION OR ALTERNATIVE MODEL! 
   
   #HSA or AGP determination
-  CMPD_IMPORT$HSA_AGP <- ifelse(CMPD_IMPORT$Compound_type == "Monoprotic base" 
-                                & CMPD_IMPORT$pKa1 >= AGP_pKa_threshold, "AGP", "HSA")
+  if (is.numeric(AGP_pKa_threshold)){
+    
+    #is the AGP_pKa_threshold is a number, use it as a threshold
+    CMPD_IMPORT$HSA_AGP <- ifelse((CMPD_IMPORT$Compound_type == "Monoprotic base" | CMPD_IMPORT$Compound_type == "Diprotic base")
+                                  & CMPD_IMPORT$pKa1 >= AGP_pKa_threshold, "AGP", "HSA")
+    
+  } else if (is.character(AGP_pKa_threshold)){
+    #if AGP_pKa_threshold is a string determins if it is all HSA or all AGP
+    
+    if (AGP_pKa_threshold == 'all HSA'){
+      CMPD_IMPORT$HSA_AGP <- 'HSA'
+    } else if (AGP_pKa_threshold == 'all AGP'){
+      CMPD_IMPORT$HSA_AGP <- 'AGP'
+    } else{
+      warning("Please either specify a numeric threshold for AGP binding or set the AGP_pKa_threshold argument to either: 'all AGP' or 'all HSA'. Defaulted to 'all HSA'")
+      CMPD_IMPORT$HSA_AGP <- 'HSA'
+    }
+    
+  }
+  
   
   CMPD_IMPORT$Absorption_Model <- "First Order Model" 
   CMPD_IMPORT$Permeability_system <- "PSA/HBD"
@@ -224,12 +261,12 @@ OrganiseInputData <- function (httk_exp_data, info,
   #calculate fraction unbound in hepatocytes
   CMPD_IMPORT$fu_inc<-''
   CMPD_IMPORT <- transform(CMPD_IMPORT, 
-                           fu_inc = ifelse(Compound_type == "Monoprotic base" | Compound_type == "Neutral" | is.na(Compound_type), 
+                           fu_inc = ifelse(Compound_type == "Monoprotic base"| Compound_type == "Diprotic base" | Compound_type == "Neutral" | is.na(Compound_type), 
                                            calculate.fu_inc(CMPD_IMPORT$logPow), 
                                            calculate.fu_inc(CMPD_IMPORT$logD_7.4)))
   #organise in ascending CS number
   CMPD_IMPORT <- CMPD_IMPORT[order(CMPD_IMPORT$CS_code),]
   
-  return(CMPD_IMPORT[1:5,])
+  return(CMPD_IMPORT)
   
 }
