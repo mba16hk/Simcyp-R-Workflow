@@ -188,8 +188,26 @@ OrganiseInputData <- function (httk_exp_data, info,
   CMPD_IMPORT$quatN <- "No" ## ASSUMED! NEEDS A SOLUTION OR ALTERNATIVE MODEL! 
   
   #HSA or AGP determination
-  CMPD_IMPORT$HSA_AGP <- ifelse((CMPD_IMPORT$Compound_type == "Monoprotic base" | CMPD_IMPORT$Compound_type == "Diprotic base")
-                                & CMPD_IMPORT$pKa1 >= AGP_pKa_threshold, "AGP", "HSA")
+  if (is.numeric(AGP_pKa_threshold)){
+    
+    #is the AGP_pKa_threshold is a number, use it as a threshold
+    CMPD_IMPORT$HSA_AGP <- ifelse((CMPD_IMPORT$Compound_type == "Monoprotic base" | CMPD_IMPORT$Compound_type == "Diprotic base")
+                                  & CMPD_IMPORT$pKa1 >= AGP_pKa_threshold, "AGP", "HSA")
+    
+  } else if (is.character(AGP_pKa_threshold)){
+    #if AGP_pKa_threshold is a string determins if it is all HSA or all AGP
+    
+    if (AGP_pKa_threshold == 'all HSA'){
+      CMPD_IMPORT$HSA_AGP <- 'HSA'
+    } else if (AGP_pKa_threshold == 'all AGP'){
+      CMPD_IMPORT$HSA_AGP <- 'AGP'
+    } else{
+      warning("Please either specify a numeric threshold for AGP binding or set the AGP_pKa_threshold argument to either: 'all AGP' or 'all HSA'. Defaulted to 'all HSA'")
+      CMPD_IMPORT$HSA_AGP <- 'HSA'
+    }
+    
+  }
+  
   
   CMPD_IMPORT$Absorption_Model <- "First Order Model" 
   CMPD_IMPORT$Permeability_system <- "PSA/HBD"
