@@ -260,3 +260,46 @@ match.df <- function(df1, df2, colnames_to_match){
   return(matched_mismatched)
   
 }
+
+#identify the out-of range PSA and HBD values
+OutOfRange_PSA_HBD <- function (collected_data){
+  
+  columns_of_interest <- keep_df_cols(collected_data,c('Code','MW','PSA','HBD','CS_code','logPow'))
+  
+  # The mandatory out of ranges for PSA and HBD
+  OutOfRange_PSA_idx <- which(columns_of_interest$PSA>154.4 | columns_of_interest$PSA<16.2)
+  out_of_range_PSA <- ifelse(columns_of_interest$PSA>154.4 | columns_of_interest$PSA<16.2, 'PSA', NA)
+  OutOfRange_HBD_idx <- which(columns_of_interest$HBD>5 | columns_of_interest$HBD<0)
+  out_of_range_HBD <- ifelse(columns_of_interest$HBD>5 | columns_of_interest$HBD<0, 'HBD', NA)
+  
+  # The out of ranges for MW and LogP
+  OutOfRange_MW_idx <- which(columns_of_interest$MW>455 | columns_of_interest$MW<60)
+  out_of_range_MW <- ifelse(columns_of_interest$MW>455 | columns_of_interest$MW<60, 'MW', NA)
+  OutOfRange_logP_idx <- which(columns_of_interest$logPow>4 | columns_of_interest$logPow<c(-3))
+  out_of_range_logP <- ifelse(columns_of_interest$logPow>4 | columns_of_interest$logPow<c(-3), 'logP', NA)
+  
+  columns_of_interest <- cbind(columns_of_interest,out_of_range_PSA,out_of_range_HBD,
+                                                     out_of_range_MW,out_of_range_logP)
+  
+  # out of range data frame
+  out_of_range <- columns_of_interest[unique(c(OutOfRange_PSA_idx,OutOfRange_HBD_idx,
+                                        OutOfRange_MW_idx,OutOfRange_logP_idx)),]
+  
+  # collapse additional columns to provide an indicator of reason of our of range
+  out_of_range_indicator <- apply(out_of_range[,c('out_of_range_PSA','out_of_range_HBD',
+                                                  'out_of_range_MW','out_of_range_logP')],
+                                  1,function(x) unique(x[!is.na(x)]))
+  
+  out_of_range_indicator_names <- unlist(lapply(out_of_range_indicator,
+                                         function(x) paste0(x,collapse = ' & ')))
+  
+  #add an indicator column
+  out_of_range$Out_of_range_Parameter <- out_of_range_indicator_names
+  
+  #keep only columns of interest
+  out_of_range <- rm_df_cols(out_of_range,c('out_of_range_PSA','out_of_range_HBD',
+                                            'out_of_range_MW','out_of_range_logP'))
+  
+  return(out_of_range)
+  
+}
