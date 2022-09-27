@@ -38,10 +38,13 @@ ProcessInputs <- function (file_directory){
   colnames(cmpd_data)<-data_headers
   
   #Keep columns of interest to us
-  data <- data.frame(cmpd_data$CODE,
-                     cmpd_data$COMPOUND,
-                     cmpd_data$INCHIKEY,
-                     cmpd_data$SMILES)
+  data <- cmpd_data[,c('CODE','SMILES','COMPOUND','INCHIKEY')]
+  
+  if ('INCHIKEY' %!in% colnames(data)){
+    return(message('Please provide compound inchikeys and ensure the inchikey header is spelled as inchikey'))
+  } else if ('CODE' %!in% colnames(data)){
+    return(message('Please provide compound codes and ensure the code header is spelled as code'))
+  }
   
   indicies <- which(colnames(cmpd_data) %in% c('DOSE','DOSEUNITS','VSSMETHOD'))
   additional_headers <- colnames(cmpd_data)[indicies]
@@ -58,11 +61,13 @@ ProcessInputs <- function (file_directory){
   # - no spaces
   
   #Rename the columns
-  X <- c("Code","Compound", "InChiKey", "SMILES", c(additional_headers))
+  X <- c(toupper(colnames(data)))
   colnames(data) <- X
   
   #move around additional columns after CAS or before SMILES
-  data <- data %>% relocate(c(additional_headers), .before = SMILES)
+  if ('SMILES'%in%colnames(data)){
+    data <- data %>% relocate(c(additional_headers), .before = SMILES)
+  }
   
   return(data)
 }

@@ -48,7 +48,7 @@ plot_profile <- function(casestudy_ID, Output, tissue_type = 'PLASMA' ,units = '
   } else if (units == 'uM'){
     
     #Extract MW from curated data
-    df_curated_data <- curated_data[which(curated_data$Code == casestudy_ID),]
+    df_curated_data <- curated_data[which(curated_data$CODE == casestudy_ID),]
     MW <- df_curated_data$MW
     
     ## convert units of cmax from mg/L -> uM #check again
@@ -127,8 +127,20 @@ plot_parameters<-function(simcyp_outputs, Compound,
     #Create Title for plot
     header<-paste(header_comp_name,'Distribution of', x_variable, sep=' ')
     
+    #identify NA variables
+    NA_idx <- which(is.na(outputs[,x_col]))
+    if (length(NA_idx)>0){
+      distribution_data <- outputs[-NA_idx,x_col]
+    } else{
+      distribution_data <- outputs[,x_col]
+    }
+    
+    if (length(distribution_data) == 0){
+      distribution_data <- rep(0, length(outputs[,x_col]))
+    }
+    
     # Distributions are plotted as density plots (only x variable is considered)
-    ggplot(outputs, aes(x=outputs[,x_col], colour= chosen_col, fill = chosen_col)) +
+    ggplot(outputs, aes(x=distribution_data, colour= chosen_col, fill = chosen_col)) +
       geom_density(alpha=0.4)+ ggtitle(header)+ xlab(x_axis_label)+
       scale_color_manual(values= chosen_col) +
       scale_fill_manual(values= chosen_col) +
@@ -209,4 +221,64 @@ compare_simulated_compound <- function(summary_simcyp, parameter, bar_order, bar
       panel.grid.minor = element_line(color = "grey"),
       axis.text = element_text(colour = "black",size=12),
       axis.title = element_text(colour = "black",size=14,face="bold"))
+}
+
+PhyschemvsPredictedParamsPlot <- function(physchem_data,summary_simcyp,physchem_param,predicted_param,plot_colour){
+  
+  x_variable_idx <- which(colnames(physchem_data)==physchem_param)
+  order_by_code_x <- physchem_data[order(physchem_data$CS_code),]
+  x_variable <- order_by_code_x[,x_variable_idx]
+  
+  y_variable_idx <- which(colnames(summary_simcyp)== predicted_param)
+  order_by_code_y <- summary_simcyp[order(summary_simcyp$CS_code),]
+  y_variable <- as.numeric(order_by_code_y[,y_variable_idx])
+  
+  #collate all data
+  df <- as.data.frame(cbind(order_by_code_x$CS_code,x_variable,y_variable))
+  
+  if(physchem_param=='Compound_type'){
+    
+    #create a tab to count observations in each bin
+    data_count <- count(df,x_variable)
+    
+    #Create Title for plot
+    header<-paste(predicted_param,'vs.', physchem_param,sep=' ')
+    
+    g1 <- ggplot(df, aes(x = x_variable, y = as.numeric(y_variable))) + 
+      geom_boxplot(outlier.colour="red", outlier.shape=8,
+                   outlier.size=2, fill=plot_colour, color="black")+
+      geom_jitter(shape=16, position=position_jitter(0))
+      #geom_text(data = data_count, aes(y = 0, label = n))
+    g1 <- g1 + xlab(physchem_param) + ylab(paste(predicted_param,determine_units(predicted_param),sep = ' ')) +
+      scale_y_continuous(breaks = scales::pretty_breaks(n = 10))
+    g1 + ggtitle(header)
+    
+  } else{
+    
+    #find the correlation coefficient
+    cor_coeff<- round(cor(as.numeric(x_variable),y_variable),2)
+    
+    #Create Title for plot
+    header<-paste(predicted_param,'vs.', physchem_param,'(r =',cor_coeff,')' ,sep=' ')
+    
+    #relationships are scatter diagrams where x and y variables are needed
+    g1 <- ggplot(df, aes(x = as.numeric(x_variable), y = as.numeric(y_variable)))
+    g1 <- g1 + geom_point(colour = plot_colour, size = 3) #+ geom_smooth(method = "lm", se = FALSE, colour = chosen_col)  
+    g1 <- g1 + xlab(physchem_param) + ylab(paste(predicted_param,determine_units(predicted_param),sep = ' ')) +
+      scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+      scale_y_continuous(breaks = scales::pretty_breaks(n = 10))
+    g1 + ggtitle(header) + theme(
+      plot.background = element_rect(fill = "white", colour = NA),
+      panel.background = element_rect(fill = "white", colour = NA),
+      axis.line.x = element_line(color="black", size = 1),
+      axis.line.y = element_line(color="black", size = 1),
+      panel.grid.major = element_line(color = "grey"),
+      panel.grid.minor = element_line(color = "grey"),
+      axis.text = element_text(colour = "black",size=12),
+      axis.title = element_text(colour = "black",size=14,face="bold")
+    )
+  }
+  
+ 
+  
 }

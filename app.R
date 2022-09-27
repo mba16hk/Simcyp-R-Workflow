@@ -20,6 +20,8 @@ source('Additional_data.R')
 source('R Workflow.R')
 source('PredictParams.R')
 source('plotting_functions.R')
+source('SIVA_invitro_distribution.R')
+
 
 ui <- dashboardPage( skin = 'black',
     dashboardHeader(title = "SimRFlow"),
@@ -27,15 +29,17 @@ ui <- dashboardPage( skin = 'black',
       sidebarMenu(menuItem('Data Collection', 
                            tabName = 'data_collection',
                            icon = icon('file-invoice')),
-                  menuItem('Predictions',
-                           tabName = 'get_predictions',
-                           icon = icon('laptop-code')),
-                  menuItem('Simulation',
-                           tabName = 'run_simulation',
-                           icon = icon('laptop-code')),
+                  menuItem('Simcyp Modules',
+                           tabName = 'simcyp_modules',
+                           icon = icon('laptop-code'),
+                           menuSubItem("Predictions", tabName = "get_predictions",icon = icon('bolt')),
+                           menuSubItem("Human Simulation", tabName = "run_simulation", icon = icon('male'))),
                   menuItem('Plot Outputs',
                            tabName = 'plotting_outputs',
                            icon = icon('chart-area')),
+                  # menuItem('In Vitro Distribution',
+                  #          tabName = 'SIVA_module',
+                  #          icon = icon('flask'), badgeLabel = "new", badgeColor = "green"),
                   menuItem('Help',
                            tabName = 'help_section',
                            icon = icon('question-circle')))
@@ -45,9 +49,10 @@ ui <- dashboardPage( skin = 'black',
       tabItems(
         tabItem('data_collection',
                 #first row
-                fluidRow(
+                fluidRow(column(width = 3,
                   #Ask the user to input a file of compounds & Experimental Data
-                  box(title = 'Input Files',
+                  box(title = 'Physicochemical Data Curation',
+                      
                       tipify(fileInput("file1", "CSV/XLSX Compound File",
                                 buttonLabel=list(icon("folder"),"Browse"),
                                 multiple = FALSE, #doesn't allow multi-file upload
@@ -57,38 +62,46 @@ ui <- dashboardPage( skin = 'black',
                              placement="bottom", trigger = "hover"),
 
                       #button to collect physiochemical information
-                      uiOutput('ui.action'),
+                      uiOutput('ui.action'), width = 12),
                       
-                      br(),
+                      #br(),
                       
                       #Inputting the Experimental Data
                       conditionalPanel(
                         condition = "input.search_physchem > 0",
                         
-                        tipify(checkboxInput("obach_data", "Obach 2008", TRUE),
-                               "Contains fu and systemic clearance data",
-                               placement="bottom", trigger = "hover"),
+                        box(title = 'Experimental Data Curation',
+                         
+                        p('Select httk databases for experimenmtal data:'),
+                               
+                        fluidRow(
+                          
+                        column(width = 4, tipify(checkboxInput("obach_data", "Obach", TRUE),
+                               "Obach 2008: Contains fu & systemic clearance data",
+                               placement="bottom", trigger = "hover")),
                         
-                        tipify(checkboxInput("wambaugh_data", "Wambaugh 2019", TRUE),
-                               "contains fu and CLint data",
-                               placement="bottom", trigger = "hover"),
+                        column(width = 4, tipify(checkboxInput("wambaugh_data", "Wambaugh", TRUE),
+                               "Wambuagh 2019: Contains fu & CLint data",
+                               placement="bottom", trigger = "hover")),
                         
-                        tipify(checkboxInput("chemphys_data", "In vitro database", TRUE),
-                               "contains fu, CLint and BP ratio data",
-                               placement="bottom", trigger = "hover"),
+                        column(width = 4, tipify(checkboxInput("chemphys_data", "IV DB", TRUE),
+                               "In Vitro database: Contains fu, CLint & BP ratio data",
+                               placement="bottom", trigger = "hover"))),
                         
-                        selectInput('fu_op', 'Fu Operation',
+                        fluidRow(
+                          
+                          column(width = 6, selectInput('fu_op', 'Fu Operation',
                                     choices = list('Arithmetic Mean'= 'arithmetic mean',
                                                    'Geometric Mean'='geometric mean',
                                                    'Median'= 'median',
                                                    'Minimum'= 'minimum',
-                                                   'Maximum'= 'maximum')),
+                                                   'Maximum'= 'maximum'))),
                         
-                        selectInput('clint_op', 'CLint Operation',
+                          column(width = 6, selectInput('clint_op', 'CLint Operation',
                                     choices = list('Arithmetic Mean'= 'arithmetic mean',
                                                    'Geometric Mean'='geometric mean',
                                                    'Minimum'= 'minimum',
-                                                   'Maximum'= 'maximum')),
+                                                   'Maximum'= 'maximum')))),
                         
                         conditionalPanel(
                           condition = "input.include_exp_data == 0",
@@ -159,15 +172,12 @@ ui <- dashboardPage( skin = 'black',
                            background-color: #a44f2e; border-color: #8a2b07'),
                                    "Searches HTTK database and organises user-input experimental data.",
                                    placement="bottom", trigger = "hover"),
-                          ), #end of conditional panel
-                        )
+                          )), #end of conditional panel
+                        width = 12,
+                        height = "20em")
                         
-                      ),
-                      
-                      width = 3,
-                      height = "20em"),#end of box
+                        ),#end of box
                   
-
                   conditionalPanel(
                     #only create this box if there are compounds which have not been found
                     condition="output.ACDLabs_box",
@@ -178,81 +188,209 @@ ui <- dashboardPage( skin = 'black',
                                "Unchecking would return a CSV of compounds not found at all.",
                                placement="bottom", trigger = "hover"),
                         
-                      #output a table of missing compounds based on user preferences
-                      dataTableOutput("TBL6"),
-                      
-                      #some information for the user
-                      p("Idea: The CSV file can be optionally imported into ACD/Labs
-                        for additional physiochemical data. You may proceed without uploading any additional data."),
-                      
-                      #check if the user would like to upload information they manually collected from ACD labs
-                      checkboxInput("upload_ACD_labs", "I wish to upload additional physchem data", FALSE),
-                    
-                      #allow user to upload the file form ACD labs if they choose to.
-                      conditionalPanel(
-                        condition = "input.upload_ACD_labs > 0",
-                                       fileInput('file3', 
-                                                 'Upload Additional Physchem Data',
-                                                 buttonLabel=list(icon("folder"),"Browse"),
-                                                 multiple = F),
-                                       actionButton('refresh_physchem',
-                                                    'Incorporate Additional Data',
-                                                    icon = icon('table'),
-                                                    style = 'color: #fff; 
+                        #output a table of missing compounds based on user preferences
+                        column(dataTableOutput("TBL6"),
+                               height = "300px",
+                               style = "height:300px; overflow-y: scroll;overflow-x: scroll;",
+                               width = 12),
+                        
+                        #some information for the user
+                        p("Idea: The CSV file can be optionally imported into ACD/Labs
+                        for additional physiochemical data. You can also manuallt collect data of interest. 
+                          You may proceed without uploading any additional data."),
+                        
+                        #check if the user would like to upload information they manually collected from ACD labs
+                        checkboxInput("upload_ACD_labs", "Upload additional physchem data to supplement/replace existing data", FALSE),
+                        
+                        #allow user to upload the file form ACD labs if they choose to.
+                        conditionalPanel(
+                          condition = "input.upload_ACD_labs > 0",
+                          fileInput('file3', 
+                                    'Upload Additional Physchem Data',
+                                    buttonLabel=list(icon("folder"),"Browse"),
+                                    multiple = F),
+                          actionButton('refresh_physchem',
+                                       'Incorporate Additional Data',
+                                       icon = icon('table'),
+                                       style = 'color: #fff; 
                            background-color: #a44f2e; border-color: #8a2b07')),
-                      height = "20em",
-                      status = 'danger',
-                      solidHeader = T,
-                      width = 9,
-                      collapsible = T))), #end of fluid row
+                        #height = "20em",
+                        status = 'danger',
+                        solidHeader = T,
+                        width = 12,
+                        collapsible = T))
+
+                  ), #end of fluid row
                   
-                 
-                box(
+                  #################################################################
+                  #             Data Collection Box and Panels                    #
+                  #################################################################
+                
+                #tabBox height  
+                tags$head(tags$style("#data_collection_boxes{height:800px !important;}")),
+                
+                column(width = 9, box( id = 'data_collection_boxes',
                   title = 'Collected Data Tables',
                   status = 'primary',
                   width = 12,
+                  
+                  ####### different conditionals for different tab boxes ###########
+                  
+                  
+                  
+                  ##### Normal Tab Box #############
+                  
+                  conditionalPanel(condition = "input.search_physchem == 0 && (input.search_httk_db == 0 && input.search_exp == 0) && input.upload_ACD_labs == 0",
+                                   tabBox(
+                                     
+                                     # Title can include an icon
+                                     title = tagList(shiny::icon("database")),
+                                     height = "730px",
+                                     
+                                     #Visualise the Input Data
+                                     tabPanel("Input Data", height = "650px", width = 12,
+                                              column(dataTableOutput("TBL1"),
+                                                     height = "650px",
+                                                     style = "height:650px; overflow-y: scroll;overflow-x: scroll;",
+                                                     width = 12)),
+                                     width = 12
+                                   ) #end of tabbox
+                                   ),
+
+                  ##### Tab Box with out of range PSA and HBD values and physchem data, condition is physchem search button click #############
+                  
+                  
+                  conditionalPanel(
+                    #only create this tab if additional data is uploaded
+                    condition="input.search_physchem == 1 && (input.search_httk_db == 0 && input.search_exp == 0)&& input.upload_ACD_labs == 0",
                   tabBox(
+                    
                     # Title can include an icon
                     title = tagList(shiny::icon("database")),
-                    height = "400px",
+                    height = "730px",
                     
                     #Visualise the Input Data
-                    tabPanel("Input Data",
-                             column(dataTableOutput("TBL1"),
-                                    height = "250px",
+                    tabPanel("Input Data", height = "650px", width = 12,
+                             column(dataTableOutput("input_tbl_2"),
+                                    height = "650px",
+                                    style = "height:650px; overflow-y: scroll;overflow-x: scroll;",
                                     width = 12)),
                     
                     #Visualise the physiochemical Data
-                    tabPanel("Physchem Data", 
+                    tabPanel("Physchem Data",  height = "650px", width = 12,
                              column(dataTableOutput("TBL2"), 
-                                    height = "250px",
+                                    height = "650px",
+                                    style = "height:650px; overflow-y: scroll;overflow-x: scroll;",
                                     width = 12)),
                     
-                    #Visualise the physiochemical Data
-                    tabPanel("Physchem Data + Further Data", 
-                            column(dataTableOutput("TBL7"), 
-                                    height = "250px",
-                                    width = 12)),
+                    #Visualise the out or range Peff values
+                    tabPanel("Out of Range Peff",  height = "640px", width = 12,
+                            p("The Peff prediction method relies on PSA/HBS values. The models were calibrated for compounds with 60<MW<455, -3<logP<4, HBD<6 and 16.2<PSA<154.4. The following compounds have out of range parameters and may result in inaccurate predictions."),
+                          column(dataTableOutput("TBL_out_of_range"),
+                                height = "640px",
+                                style = "height:640px; overflow-y: scroll",
+                                width = 12)),
                     
-                    #Visualise the experimental Data
-                    tabPanel("Experimental Data", 
-                             column(dataTableOutput("TBL3"), 
-                                    height = "250px",
-                                    width = 12)),
                     width = 12
-                  ), #end of tabbox
-                  collapsible = TRUE), #end of box
+                  )), #end of tabbox
+                  
+                  ##### Tab Box with experimental data, condition is exp data search button click #############
+                  
+                  conditionalPanel(
+                    #only create this tab if additional data is uploaded
+                    condition="input.search_physchem == 1 && (input.search_httk_db == 1 || input.search_exp == 1) && input.upload_ACD_labs == 0",
+                    tabBox(
+                      
+                      # Title can include an icon
+                      title = tagList(shiny::icon("database")),
+                      height = "730px",
+                      
+                      #Visualise the Input Data
+                      tabPanel("Input Data", height = "650px", width = 12,
+                               column(dataTableOutput("input_tbl_3"),
+                                      height = "650px",
+                                      style = "height:650px; overflow-y: scroll;overflow-x: scroll;",
+                                      width = 12)),
+                      
+                      #Visualise the physiochemical Data
+                      tabPanel("Physchem Data",  height = "650px", width = 12,
+                               column(dataTableOutput("physchem_tbl_2"), 
+                                      height = "650px",
+                                      style = "height:650px; overflow-y: scroll;overflow-x: scroll;",
+                                      width = 12)),
+                      
+                      #Visualise the out or range Peff values
+                      tabPanel("Out of Range Peff",  height = "640px", width = 12,
+                               p("The Peff prediction method relies on PSA/HBS values. The models were calibrated for compounds with 60<MW<455, -3<logP<4, HBD<6 and 16.2<PSA<154.4. The following compounds have out of range parameters and may result in inaccurate predictions."),
+                               column(dataTableOutput("TBL_out_of_range2"),
+                                      height = "640px",
+                                      style = "height:640px; overflow-y: scroll",
+                                      width = 12)),
+                      
+                      #Visualise the experimental Data
+                      tabPanel("Experimental Data",  height = "650px", width = 12,
+                               column(dataTableOutput("TBL3"),
+                                      height = "650px",
+                                      style = "height:650px; overflow-y: scroll;overflow-x: scroll;",
+                                      width = 12)),
+                      
+                      width = 12
+                    )), #end of tabbox
+                  
+                  ##### Tab Box with experimental data, condition is exp data search button click and additional physchem data #############
+                  
+                  conditionalPanel(
+                    #only create this tab if additional data is uploaded
+                    condition="input.search_physchem == 1 && (input.search_httk_db == 1 || input.search_exp == 1) && input.upload_ACD_labs > 0",
+                    tabBox(
+                      
+                      # Title can include an icon
+                      title = tagList(shiny::icon("database")),
+                      height = "730px",
+                      
+                      #Visualise the Input Data
+                      tabPanel("Input Data", height = "650px", width = 12,
+                               column(dataTableOutput("input_tbl_4"),
+                                      height = "650px",
+                                      style = "height:650px; overflow-y: scroll;overflow-x: scroll;",
+                                      width = 12)),
+                      
+                      #Visualise the physiochemical Data
+                      tabPanel("Physchem Data",  height = "650px", width = 12,
+                               column(dataTableOutput("physchem_tbl_3"), 
+                                      height = "650px",
+                                      style = "height:650px; overflow-y: scroll;overflow-x: scroll;",
+                                      width = 12)),
+                      
+                      #Visualise the out or range Peff values
+                      tabPanel("Out of Range Peff",  height = "640px", width = 12,
+                               p("The Peff prediction method relies on PSA/HBS values. The models were calibrated for compounds with 60<MW<455, -3<logP<4, HBD<6 and 16.2<PSA<154.4. The following compounds have out of range parameters and may result in inaccurate predictions."),
+                               column(dataTableOutput("TBL_out_of_range3"),
+                                      height = "640px",
+                                      style = "height:640px; overflow-y: scroll",
+                                      width = 12)),
+                      
+                      #Visualise the experimental Data
+                      tabPanel("Experimental Data",  height = "650px", width = 12,
+                               column(dataTableOutput("exp_dat_tbl_2"),
+                                      height = "650px",
+                                      style = "height:650px; overflow-y: scroll;overflow-x: scroll;",
+                                      width = 12)),
+                      
+                      #only create this tab if additional data is uploaded
+                      tabPanel("Physchem Data + Further Data",  height = "650px", width = 12,
+                              column(dataTableOutput("TBL7"),
+                                     height = "650px",
+                                     style = "height:650px; overflow-y: scroll;overflow-x: scroll;",
+                                     width = 12)),
+                      
+                      width = 12
+                    )), #end of tabbox
+                  
+                  collapsible = TRUE))) #end of box
                 
-                box(
-                  title = 'Out of Range Values for Peff Prediction',
-                  status = 'warning',
-                  width = 8,
-                  #some information for the user
-                  p("The Peff prediction method relies on PSA/HBS values. The models were calibrated for compounds with 60<MW<455, -3<logP<4, HBD<6 and 16.2<PSA<154.4. The following compounds have out of range parameters and may result in inaccurate predictions."),
-                  #output a table of missing compounds based on user preferences
-                  dataTableOutput("TBL_out_of_range"),
-                  collapsible = TRUE) #end of box
-                ), # end of tabitem 1
+              
+                ), #end of tabItem 1
         
         tabItem('get_predictions',
                 
@@ -507,173 +645,498 @@ ui <- dashboardPage( skin = 'black',
         ), #end of tabitem 2
         
         tabItem('plotting_outputs',
+                
+                #Custom CSS
+                tags$head(tags$style("#conc_time_box{height:1000px !important;}")),
+                
                 #plotting
-                box(
+                conditionalPanel(
+                  condition = "input.simulate_button > 0",
+                box( id = "conc_time_box",
                   
                   title = 'Plot Simulated Outputs',
                   
-                  #Enter the compound code  
-                  uiOutput("compound_lists"),
-                  
-                  #Enter the tissue type 
-                  uiOutput("tissue_lists"),
-                  
-                  #Select Log Scale or Normal Scale
-                  radioButtons('log_scale','y-axis scale', 
-                               choices = c('Logarithmic'= T,
-                                           'Natural'= F),
-                               selected = F),
-                  
-                  
-                  #select y axis units
-                  selectInput('unit', 'Concentration Units',
-                              choices = list('ng/mL'= 'ng/mL','uM'='uM')),
-                  
-                  #button to submit specifications and plot
-                  #submitButton(text = 'Plot Compound'),
-                  
-                  plotOutput("conc_time_plot"),
-                  status = "primary", 
-                  solidHeader = TRUE,
-                  collapsible = TRUE), #end of box
-                
-                box(
-                  
-                  title = 'Visualise Trends and Relationships',
-                  
-                  #Enter the compound code  
-                  uiOutput("compound_lists2"),
-                  
-                  #select distribution or relationship
-                  radioButtons('plot_type','Plot Type', 
-                               choices = c('Distribution'='Distribution',
-                                           'Relationship'='Relationship'),
-                               selected = 'Distribution'),
-                  
-                  #select x axis
-                  selectInput('x_axis_var', 'x Variable',
-                              choices = list('Plasma Tmax'= 'Tmax',
-                                             'Plasma Cmax'='Cmax_PLASMA',
-                                             'AUC'= 'AUC',
-                                             'AUCinf'= 'AUCinf',
-                                             'Half Life' = 'HalfLife',
-                                             'Accumulation Index'= 'AccumulationIndex',
-                                             'BSA'='BSA',
-                                             'Age'='Age',
-                                             'BW'='BW',
-                                             'GFR'='GFR',
-                                             'Volume of Distribution'='Vss',
-                                             'Fraction Absorbed'='Fa',
-                                             'Fraction unbound in plasma'= 'Fu_plasma',
-                                             'Ka'='Ka',
-                                             'Skin Cmax' = 'Cmax_SKIN',
-                                             'Kidney Cmax' =  'Cmax_KIDNEY',
-                                             'Brain Cmax' = 'Cmax_BRAIN',
-                                             'Heart Cmax' = 'Cmax_HEART',
-                                             'Gut Cmax' = 'Cmax_GUT',
-                                             'Lung Cmax' = 'Cmax_LUNG',
-                                             'Liver Cmax' = 'Cmax_LIVER',
-                                             'Pancreas Cmax' = 'Cmax_PANCREAS',
-                                             'Spleen Cmax' = 'Cmax_SPLEEN',
-                                             'Muscle Cmax' = 'Cmax_MUSCLE',
-                                             'Adipose Cmax' = 'Cmax_ADIPOSE')),
-                  
-                  #Only display y axis option if we are plotting a relationship
-                  conditionalPanel(
-                    condition = "input.plot_type == 'Relationship'",
-                    #select y axis
-                    selectInput('y_axis_var', 'y Variable',
-                                choices = list('Plasma Tmax'= 'Tmax',
-                                               'Plasma Cmax'='Cmax_PLASMA',
-                                               'AUC'= 'AUC',
-                                               'AUCinf'= 'AUCinf',
-                                               'Half Life' = 'HalfLife',
-                                               'Accumulation Index'= 'AccumulationIndex',
-                                               'BSA'='BSA',
-                                               'Age'='Age',
-                                               'BW'='BW',
-                                               'GFR'='GFR',
-                                               'Volume of Distribution'='Vss',
-                                               'Fraction Absorbed'='Fa',
-                                               'Fraction unbound in plasma'= 'Fu_plasma',
-                                               'Ka'='Ka',
-                                               'Skin Cmax' = 'Cmax_SKIN',
-                                               'Kidney Cmax' =  'Cmax_KIDNEY',
-                                               'Brain Cmax' = 'Cmax_BRAIN',
-                                               'Heart Cmax' = 'Cmax_HEART',
-                                               'Gut Cmax' = 'Cmax_GUT',
-                                               'Lung Cmax' = 'Cmax_LUNG',
-                                               'Liver Cmax' = 'Cmax_LIVER',
-                                               'Pancreas Cmax' = 'Cmax_PANCREAS',
-                                               'Spleen Cmax' = 'Cmax_SPLEEN',
-                                               'Muscle Cmax' = 'Cmax_MUSCLE',
-                                               'Adipose Cmax' = 'Cmax_ADIPOSE'))
-                  ), #end of conditional panel
-                  
-                  #select plot colour
-                  selectInput('plot_col', 'Plot Colour',
-                              choices = list('Green'= 'seagreen',
-                                             'Red' = 'red',
-                                             'Blue'='blue',
-                                             'Yellow'='Gold',
-                                             'Pink'='pink',
-                                             'Purple'='purple',
-                                             'Orange'='orange')),
-                  
-                  plotOutput("additional_plot"),
-                  status = "success", 
-                  solidHeader = TRUE,
-                  collapsible = TRUE), #end of box
-                
-                box(
-                  
-                  title = 'Cross-Compound Comparison',
-                  
-                  # Parameters
-                  selectInput('sim_parameters', 'Simulated Parameters',
-                              choices = list('Plasma Tmax'= 'Tmax',
-                                             'Plasma Cmax'='Cmax_PLASMA',
-                                             'AUC'= 'AUC',
-                                             'AUCinf'= 'AUCinf',
-                                             'Half Life' = 'HalfLife',
-                                             'Accumulation Index'= 'AccumulationIndex',
-                                             'Volume of Distribution'='Vss',
-                                             'Fraction Absorbed'='Fa',
-                                             'Fraction unbound in plasma'= 'Fu_plasma',
-                                             'Ka'='Ka',
-                                             'Skin Cmax' = 'Cmax_SKIN',
-                                             'Kidney Cmax' =  'Cmax_KIDNEY',
-                                             'Brain Cmax' = 'Cmax_BRAIN',
-                                             'Heart Cmax' = 'Cmax_HEART',
-                                             'Gut Cmax' = 'Cmax_GUT',
-                                             'Lung Cmax' = 'Cmax_LUNG',
-                                             'Liver Cmax' = 'Cmax_LIVER',
-                                             'Pancreas Cmax' = 'Cmax_PANCREAS',
-                                             'Spleen Cmax' = 'Cmax_SPLEEN',
-                                             'Muscle Cmax' = 'Cmax_MUSCLE',
-                                             'Adipose Cmax' = 'Cmax_ADIPOSE')),
-                  
-                  #Select x axis orders
-                  radioButtons('param_order','x-axis ordering', 
-                               choices = c('Ascending Value'= 'ascending',
-                                           'Compound Code'= 'compound_code'),
-                               selected = 'compound_code'),
-                  
-                  #select plot colour
-                  selectInput('plot_col_2', 'Bar Colour',
-                              choices = list('Green'= 'seagreen',
-                                             'Red' = 'red',
-                                             'Blue'='blue',
-                                             'Yellow'='Gold',
-                                             'Pink'='pink',
-                                             'Purple'='purple',
-                                             'Orange'='orange')),
+                  tabBox( height = "900px",
+                          
+                          ##########################################################################
+                          ######################## conc-time-profile ###############################
+                          ##########################################################################
+                          
+                          tabPanel("Concentration-Time Profiles", height = "760px",
+                                   column(width = 12,
+                                          
+                                          #Allow user to enter compound code and tissue-type
+                                          fluidRow(column(uiOutput("compound_lists"), width = 6),column(uiOutput("tissue_lists"), width = 6)),
+                                          
+                                          #select y axis units
+                                          selectInput('unit', 'Concentration Units',
+                                                      choices = list('ng/mL'= 'ng/mL','uM'='uM')),
+                                          
+                                          #Select Log Scale or Normal Scale
+                                          radioButtons('log_scale','y-axis scaling', 
+                                                       choices = c('Logarithmic'= T,
+                                                                   'Natural'= F),
+                                                       selected = F), 
 
+                                          #plot the concentration-time profile
+                                          plotOutput("conc_time_plot", height = '560px')), 
+                                          #download the conc-time plot
+                                          downloadButton(outputId = "DownloadConcPlot", label = "Download Plot"),
+                                   
+                                   width = 12),
+                          
+                          ##########################################################################
+                          ##                      Distribution+rln Plot                        #####
+                          ##########################################################################
+                          
+                          tabPanel("Parameter Distributions and Relationships", height = "760px",
+                                   column(width = 6, 
+                                          
+                                          #Enter the compound code  
+                                          uiOutput("compound_lists2"),
+                                          
+                                          #select x axis
+                                          selectInput('x_axis_var1', 'x Variable',
+                                                      choices = list('Plasma Tmax'= 'Tmax',
+                                                                     'Plasma Cmax'='Cmax_PLASMA',
+                                                                     'AUC'= 'AUC',
+                                                                     'AUCinf'= 'AUCinf',
+                                                                     'Half Life' = 'HalfLife',
+                                                                     'Accumulation Index'= 'AccumulationIndex',
+                                                                     'BSA'='BSA',
+                                                                     'Age'='Age',
+                                                                     'BW'='BW',
+                                                                     'GFR'='GFR',
+                                                                     # 'Volume of Distribution'='Vss',
+                                                                     # 'Fraction Absorbed'='Fa',
+                                                                     # 'Fraction unbound in plasma'= 'Fu_plasma',
+                                                                     'Ka'='Ka',
+                                                                     'Skin Cmax' = 'Cmax_SKIN',
+                                                                     'Kidney Cmax' =  'Cmax_KIDNEY',
+                                                                     'Brain Cmax' = 'Cmax_BRAIN',
+                                                                     'Heart Cmax' = 'Cmax_HEART',
+                                                                     'Gut Cmax' = 'Cmax_GUT',
+                                                                     'Lung Cmax' = 'Cmax_LUNG',
+                                                                     'Liver Cmax' = 'Cmax_LIVER',
+                                                                     'Pancreas Cmax' = 'Cmax_PANCREAS',
+                                                                     'Spleen Cmax' = 'Cmax_SPLEEN',
+                                                                     'Muscle Cmax' = 'Cmax_MUSCLE',
+                                                                     'Adipose Cmax' = 'Cmax_ADIPOSE')),
+                                          
+                                            #select plot colour
+                                            selectInput('plot_col', 'Plot Colour',
+                                                        choices = list('Green'= 'darkolivegreen3',
+                                                                       'Burgundy' = 'indianred',
+                                                                       'Red' = 'firebrick1',
+                                                                       'Blue'='royalblue',
+                                                                       'Yellow'='goldenrod1',
+                                                                       'Pink'='hotpink3',
+                                                                       'Purple'='mediumpurple2',
+                                                                       'Orange'='orange',
+                                                                       'Teal'='lightseagreen',
+                                                                       'Black' = 'gray0')),
+                                          
+                                          #Distribution Plot
+                                          plotOutput("distribution_plot",  height = '560px'),
+                                          #download the distribution_plot plot
+                                          downloadButton(outputId = "DownloaddistPlot", label = "Download Plot")
+                                         ), #end of column
+                                   
+                                   column(width = 6,
+                                          
+                                          #Enter the compound code  
+                                          uiOutput("compound_lists3"),
+                                          
+                                          fluidRow(column(width = 6,
+                                                          #select x axis
+                                                          selectInput('x_axis_var2', 'x Variable',
+                                                                      choices = list('Plasma Tmax'= 'Tmax',
+                                                                                     'Plasma Cmax'='Cmax_PLASMA',
+                                                                                     'AUC'= 'AUC',
+                                                                                     'AUCinf'= 'AUCinf',
+                                                                                     'Half Life' = 'HalfLife',
+                                                                                     'Accumulation Index'= 'AccumulationIndex',
+                                                                                     'BSA'='BSA',
+                                                                                     'Age'='Age',
+                                                                                     'BW'='BW',
+                                                                                     'GFR'='GFR',
+                                                                                     # 'Volume of Distribution'='Vss',
+                                                                                     # 'Fraction Absorbed'='Fa',
+                                                                                     # 'Fraction unbound in plasma'= 'Fu_plasma',
+                                                                                     'Ka'='Ka',
+                                                                                     'Skin Cmax' = 'Cmax_SKIN',
+                                                                                     'Kidney Cmax' =  'Cmax_KIDNEY',
+                                                                                     'Brain Cmax' = 'Cmax_BRAIN',
+                                                                                     'Heart Cmax' = 'Cmax_HEART',
+                                                                                     'Gut Cmax' = 'Cmax_GUT',
+                                                                                     'Lung Cmax' = 'Cmax_LUNG',
+                                                                                     'Liver Cmax' = 'Cmax_LIVER',
+                                                                                     'Pancreas Cmax' = 'Cmax_PANCREAS',
+                                                                                     'Spleen Cmax' = 'Cmax_SPLEEN',
+                                                                                     'Muscle Cmax' = 'Cmax_MUSCLE',
+                                                                                     'Adipose Cmax' = 'Cmax_ADIPOSE'))),
+                                                          
+                                                          column(width = 6,
+                                                                 #select y axis
+                                                                 selectInput('y_axis_var', 'y Variable',
+                                                                             choices = list('Plasma Tmax'= 'Tmax',
+                                                                                            'Plasma Cmax'='Cmax_PLASMA',
+                                                                                            'AUC'= 'AUC',
+                                                                                            'AUCinf'= 'AUCinf',
+                                                                                            'Half Life' = 'HalfLife',
+                                                                                            'Accumulation Index'= 'AccumulationIndex',
+                                                                                            'BSA'='BSA',
+                                                                                            'Age'='Age',
+                                                                                            'BW'='BW',
+                                                                                            'GFR'='GFR',
+                                                                                            # 'Volume of Distribution'='Vss',
+                                                                                            # 'Fraction Absorbed'='Fa',
+                                                                                            # 'Fraction unbound in plasma'= 'Fu_plasma',
+                                                                                            'Ka'='Ka',
+                                                                                            'Skin Cmax' = 'Cmax_SKIN',
+                                                                                            'Kidney Cmax' =  'Cmax_KIDNEY',
+                                                                                            'Brain Cmax' = 'Cmax_BRAIN',
+                                                                                            'Heart Cmax' = 'Cmax_HEART',
+                                                                                            'Gut Cmax' = 'Cmax_GUT',
+                                                                                            'Lung Cmax' = 'Cmax_LUNG',
+                                                                                            'Liver Cmax' = 'Cmax_LIVER',
+                                                                                            'Pancreas Cmax' = 'Cmax_PANCREAS',
+                                                                                            'Spleen Cmax' = 'Cmax_SPLEEN',
+                                                                                            'Muscle Cmax' = 'Cmax_MUSCLE',
+                                                                                            'Adipose Cmax' = 'Cmax_ADIPOSE')))
+                                                          ),
+                                          
+   
+                                          #select plot colour
+                                          selectInput('plot_col2', 'Plot Colour',
+                                                      choices = list('Green'= 'darkolivegreen3',
+                                                                     'Burgundy' = 'indianred',
+                                                                     'Red' = 'firebrick1',
+                                                                     'Blue'='royalblue',
+                                                                     'Yellow'='goldenrod1',
+                                                                     'Pink'='hotpink3',
+                                                                     'Purple'='mediumpurple2',
+                                                                     'Orange'='orange',
+                                                                     'Teal'='lightseagreen',
+                                                                     'Black' = 'gray0')),
+                                          
+                                          plotOutput("relationship_plot",  height = '560px'),
+                                          #download the relationship_plot plot
+                                          downloadButton(outputId = "DownloadrlnPlot", label = "Download Plot")),#end of column
+
+                                   width = 12), #end of tab Panel
+                          
+                          tabPanel("Cross-Compound Comparison Charts", height = "760px",
+                                   column(width = 12,
+                                          
+                                          #Allow user to enter compound code and tissue-type
+                                          fluidRow(column(# Parameters
+                                            selectInput('sim_parameters', 'Simulated Parameters',
+                                                        choices = list('Plasma Tmax'= 'Tmax',
+                                                                       'Plasma Cmax'='Cmax_PLASMA',
+                                                                       'AUC'= 'AUC',
+                                                                       'AUCinf'= 'AUCinf',
+                                                                       'Half Life' = 'HalfLife',
+                                                                       'Accumulation Index'= 'AccumulationIndex',
+                                                                       'Volume of Distribution'='Predicted Vss',
+                                                                       'Fraction Absorbed'='Predicted Fa',
+                                                                       'Fraction unbound in plasma'= 'Predicted Fu',
+                                                                       'Ka'='Ka',
+                                                                       'Skin Cmax' = 'Cmax_SKIN',
+                                                                       'Kidney Cmax' =  'Cmax_KIDNEY',
+                                                                       'Brain Cmax' = 'Cmax_BRAIN',
+                                                                       'Heart Cmax' = 'Cmax_HEART',
+                                                                       'Gut Cmax' = 'Cmax_GUT',
+                                                                       'Lung Cmax' = 'Cmax_LUNG',
+                                                                       'Liver Cmax' = 'Cmax_LIVER',
+                                                                       'Pancreas Cmax' = 'Cmax_PANCREAS',
+                                                                       'Spleen Cmax' = 'Cmax_SPLEEN',
+                                                                       'Muscle Cmax' = 'Cmax_MUSCLE',
+                                                                       'Adipose Cmax' = 'Cmax_ADIPOSE')), width = 6),
+                                            
+                                            column(selectInput('plot_col_2', 'Bar Colour',
+                                                               choices = list('Green'= 'darkolivegreen3',
+                                                                              'Burgundy' = 'indianred',
+                                                                              'Red' = 'firebrick1',
+                                                                              'Blue'='royalblue',
+                                                                              'Yellow'='goldenrod1',
+                                                                              'Pink'='hotpink3',
+                                                                              'Purple'='mediumpurple2',
+                                                                              'Orange'='orange',
+                                                                              'Teal'='lightseagreen',
+                                                                              'Black' = 'gray0')), width = 6)),
+
+                                          #Select in ascending order or compound alphanumeric order
+                                          radioButtons('param_order','x-axis ordering', 
+                                                       choices = c('Ascending Value'= 'ascending',
+                                                                   'Compound Code'= 'compound_code'),
+                                                       selected = 'compound_code'),
+                                          
+                                          #plot the concentration-time profile
+                                          plotOutput("comp_comparison_plot", height = '600px')), 
+                                   #download the conc-time plot
+                                   downloadButton(outputId = "DownloadCompCmparPlot", label = "Download Plot"),
+                                   
+                                   width = 12),
+                          
+                          tabPanel("Physchem Properties vs. Predicted Parameters", height = "760px",
+                                   column(width = 12,
+                                          
+                                          #Allow user to enter compound code and tissue-type
+                                          fluidRow(column(# Parameters
+                                            selectInput('pred_parameters', 'Predicted Parameters',
+                                                        choices = list('Plasma Tmax'= 'Tmax',
+                                                                       'Plasma Cmax'='Cmax_PLASMA',
+                                                                       'AUC'= 'AUC',
+                                                                       'AUCinf'= 'AUCinf',
+                                                                       'Half Life' = 'HalfLife',
+                                                                       'Accumulation Index'= 'AccumulationIndex',
+                                                                       'Volume of Distribution'='Predicted Vss',
+                                                                       'Fraction Absorbed'='Predicted Fa',
+                                                                       'Fraction unbound in plasma'= 'Predicted Fu',
+                                                                       'Ka'='Ka',
+                                                                       'Skin Cmax' = 'Cmax_SKIN',
+                                                                       'Kidney Cmax' =  'Cmax_KIDNEY',
+                                                                       'Brain Cmax' = 'Cmax_BRAIN',
+                                                                       'Heart Cmax' = 'Cmax_HEART',
+                                                                       'Gut Cmax' = 'Cmax_GUT',
+                                                                       'Lung Cmax' = 'Cmax_LUNG',
+                                                                       'Liver Cmax' = 'Cmax_LIVER',
+                                                                       'Pancreas Cmax' = 'Cmax_PANCREAS',
+                                                                       'Spleen Cmax' = 'Cmax_SPLEEN',
+                                                                       'Muscle Cmax' = 'Cmax_MUSCLE',
+                                                                       'Adipose Cmax' = 'Cmax_ADIPOSE')), width = 4),
+                                            
+                                            column(# Parameters
+                                              selectInput('physchem_parameters', 'Physchem Parameters',
+                                                          choices = list('Compound Characterisation' = 'Compound_type',
+                                                                         'Molecular Weight'= 'MW',
+                                                                         'LogP'='logP',
+                                                                         'Polar Surface Area'= 'PSA',
+                                                                         'Hydrogen Bond Donor Count'= 'HBD')), width = 4),
+                                            
+                                            column(selectInput('plot_col3', 'Bar Colour',
+                                                               choices = list('Green'= 'darkolivegreen3',
+                                                                              'Burgundy' = 'indianred',
+                                                                              'Red' = 'firebrick1',
+                                                                              'Blue'='royalblue',
+                                                                              'Yellow'='goldenrod1',
+                                                                              'Pink'='hotpink3',
+                                                                              'Purple'='mediumpurple2',
+                                                                              'Orange'='orange',
+                                                                              'Teal'='lightseagreen',
+                                                                              'Black' = 'gray0')), width = 4)),
+                                          
+
+                                          #plot the concentration-time profile
+                                          plotOutput("physchem_prediction_comparison_plot", height = '600px')), 
+                                   #download the conc-time plot
+                                   downloadButton(outputId = "DownloadphyschemCompCmparPlot", label = "Download Plot"),
+                                   
+                                   width = 12),
+                          
+                          width = 12
+                  ),
                   
-                  plotOutput("comp_comparison_plot"),
                   status = "primary", 
-                  solidHeader = TRUE,
-                  collapsible = TRUE), #end of box
+                  solidHeader = FALSE,
+                  width = 12)), #end of box
+                
+        ), #end of tabItem
+        
+        tabItem('SIVA_module',
+                
+                fluidRow(
+                  
+                  tags$head(tags$style("#SIVA_boxes{height:360px !important;}")),
+                  
+                       #Ask the user to input a file of compounds & Experimental Data
+                       box(id = "SIVA_boxes",title = 'In Vitro Distribution Inputs',
+                           
+                           fluidRow(column(width = 9, 
+                                           tipify(fileInput("SIVA_file", "CSV/TXT Input File",
+                                                            buttonLabel=list(icon("folder"),"Browse"),
+                                                            multiple = FALSE, #doesn't allow multi-file upload
+                                                            accept = c(".txt",".csv"),
+                                                            placeholder = 'cmpnds.csv'),
+                                                  "Ensure headers 'CAS, INCHIKEY, NAME, FU' are present",
+                                                  placement="bottom", trigger = "hover")),
+                                    
+                                    column(width = 3, style = "margin-top: +25px;",
+                                           #button to collect information for SIVA
+                                           tipify(actionButton("search_SIVA_data",
+                                                               label = "Curate Data",
+                                                               icon = icon('search'),
+                                                               style = 'color: #fff; background-color: #a44f2e; border-color: #8a2b07'),
+                                                  "Search for physchem data and Henry's law constant.",
+                                                  placement="bottom", trigger = "hover"))
+                                    
+                                    ),
+
+                           conditionalPanel(
+                             condition = "input.search_SIVA_data > 0",
+                             fluidRow(
+                               
+                               column(width = 4,
+                                      boxPad(
+                                        color = "red",
+                                        style = "height: 75px",
+                                        descriptionBlock(
+                                          header = textOutput("missing_comp_num"), 
+                                          text = "Missing Compounds", 
+                                          rightBorder = FALSE,
+                                          marginBottom = TRUE
+                                        ))),
+                               
+                               column(
+                                 width = 4,
+                                 boxPad(
+                                   color = "yellow",
+                                   style = "height: 75px",
+                                   descriptionBlock(
+                                     header = textOutput("duplicated_comp_num"),  
+                                     text = "Duplicated Compounds", 
+                                     rightBorder = FALSE,
+                                     marginBottom = TRUE
+                                   ))),
+                               
+                               column(width = 4,
+                                      boxPad(
+                                        color = "blue",
+                                        style = "height: 75px",
+                                        descriptionBlock(
+                                          header = textOutput("missing_hlc_num"),  
+                                          text = "Missing HLC", 
+                                          rightBorder = FALSE,
+                                          marginBottom = TRUE
+                                        )))
+                             ),
+                             
+                             br(),
+                             
+                             conditionalPanel(condition = "output.missing_comp_num==0 && output.duplicated_comp_num==0 && output.missing_hlc_num ==0",
+                                              p("You may proceed to predicting the in vitro distribution.")),
+                             
+                             conditionalPanel(condition = "output.missing_comp_num!=0 || output.duplicated_comp_num!=0 || output.missing_hlc_num !=0",
+                                              p("Optional: You may download the curated data file, populate the missing entries by manullay searching for them, and reupload here:"),
+                                              
+                                              fluidRow(column(width = 9,tipify(fileInput("SIVA_file_reupload", "CSV/EXCEL Input File",
+                                                               buttonLabel=list(icon("folder"),"Browse"),
+                                                               multiple = FALSE, #doesn't allow multi-file upload
+                                                               accept = c(".xlsx",".csv"),
+                                                               placeholder = 'cmpnds_updated.csv'),
+                                                     "Optionally re-upload the collected data file containing missing entries.",
+                                                     placement="bottom", trigger = "hover")),
+                                              
+                                              column(width = 3, style = "margin-top: +25px;",
+                                                     #button to collect information for SIVA
+                                                     tipify(actionButton("update_SIVA_data",
+                                                                         label = "Update Data",
+                                                                         icon = icon('search'),
+                                                                         style = 'color: #fff; 
+                           background-color: #a44f2e; border-color: #8a2b07'),
+                                                            "Update the SIVA curated data.",
+                                                            placement="bottom", trigger = "hover")))
+                                              
+                                              
+                                              ),
+                             
+                             
+                             
+                           ),
+
+                           status = "primary", 
+                           solidHeader = FALSE,
+                           width = 6),
+                       
+                       box(id = "SIVA_boxes", title = 'In Vitro Distribution Parameters',
+                           
+                           
+                           fluidRow(
+                             column(
+                               width = 6,
+                               
+                               #set the nominal concentration
+                               numericInput('nominal_conc', 'Nominal Concentration (M)',
+                                            value = 1e-5, min = 1e-10, max = 1e10),
+                               
+                               #set the number of cells
+                               numericInput('number_cells', 'Cell Number',
+                                            value = 1000, min = 100, max = 20000),
+                               
+                               #set the pH of the medium
+                               numericInput('medium_pH', 'Media pH',
+                                            value = 7.4, min = 0, max = 14)
+                               
+                               
+                             ), #end of column
+                             
+                             column(
+                               width = 6,
+                               
+                               #set the volume of the well
+                               numericInput('vol_well', 'Well Volume (uL)',
+                                            value = 360, min = 50, max = 10000),
+                               
+                               #set the well diameter
+                               numericInput('well_diameter', 'Well Diameter (mm)',
+                                            value = 6.4, min = 0.1, max = 25),
+                               
+                               #set the serum fraction
+                               numericInput('serum_fraction', 'Serum fraction',
+                                            value = 0.1, min = 0.00000001, max = 1)
+                               
+                               
+                             )), #end of column
+                           
+                           #button to collect information for SIVA
+                           actionButton("predict_iv_distribution",
+                                               label = "Predict In Vitro Distribution",
+                                               icon = icon('laptop-code'),
+                                               style = 'color: #fff; 
+                           background-color: #a44f2e; border-color: #8a2b07; padding:8px; font-size:100%; float:center; width:330px'),
+
+                           status = "primary", 
+                           solidHeader = FALSE,
+                           width = 6)
+                       
+                       ),
+                
+                #Custom CSS
+                tags$head(tags$style("#my_box{height:700px !important;}")),
+                
+                conditionalPanel(
+                  condition = "input.search_SIVA_data > 0",
+                
+                box(id = "my_box",title = 'In Vitro Distribution Outputs',
+                    
+                    tabBox( height = "630px",
+                      #Curated data table
+                      tabPanel("Curated Data", height = "560px",
+                               column(width = 12, dataTableOutput("SIVA_curated_data_tbl"),style = "height:560px; overflow-y: scroll;overflow-x: scroll;"), 
+                                      width = 12),
+                      
+                      #SIVA output table
+                      tabPanel("In Vitro Distribution Predictions", height = "560px",
+                               column(width = 12, dataTableOutput("SIVA_output_tbl"),style = "height:560px; overflow-y: scroll;overflow-x: scroll;"),  
+                                      width = 12),
+                      
+                      #SIVA output plots
+                      tabPanel("In Vitro Distribution Plots", height = "560px",
+                               column(width = 12, plotOutput("SIVA_output_plots",height = '500px')), 
+                               downloadButton(outputId = "Cat10", label = "Download Plots"),
+                               width = 12),
+                      
+                      width = 12
+                    ),
+                    
+                    status = "primary", 
+                    solidHeader = FALSE,
+                    width = 12))
+                
+                
+                
+                
                 
         ), #end of tabItem
         
@@ -697,33 +1160,67 @@ server <- function(input, output, session) {
 
     })
     
+    #Display the collected information
+    output$TBL1 <- renderDataTable(data(),
+                                   rownames = FALSE,
+                                   extensions = 'Buttons',
+                                   options = list(
+                                     paging = FALSE,
+                                     searching = TRUE,
+                                     ordering = TRUE,
+                                     #scrollCollapse= TRUE,
+                                     dom = 'l<"sep">Bfrtip',
+                                     buttons = c('csv', 'excel')
+                                   ))
+    
+    output$input_tbl_2 <- renderDataTable(data(),
+                                          rownames = FALSE,
+                                          extensions = 'Buttons',
+                                          options = list(
+                                            paging = FALSE,
+                                            searching = TRUE,
+                                            ordering = TRUE,
+                                            #scrollCollapse= TRUE,
+                                            dom = 'l<"sep">Bfrtip',
+                                            buttons = c('csv', 'excel')
+                                          ))
+    
+    output$input_tbl_3 <- renderDataTable(data(),
+                                          rownames = FALSE,
+                                          extensions = 'Buttons',
+                                          options = list(
+                                            paging = FALSE,
+                                            searching = TRUE,
+                                            ordering = TRUE,
+                                            #scrollCollapse= TRUE,
+                                            dom = 'l<"sep">Bfrtip',
+                                            buttons = c('csv', 'excel')
+                                          ))
+    
+    output$input_tbl_4 <- renderDataTable(data(),
+                                          rownames = FALSE,
+                                          extensions = 'Buttons',
+                                          options = list(
+                                            paging = FALSE,
+                                            searching = TRUE,
+                                            ordering = TRUE,
+                                            #scrollCollapse= TRUE,
+                                            dom = 'l<"sep">Bfrtip',
+                                            buttons = c('csv', 'excel')
+                                          ))
+    
+    
+    
     output$ui.action <- renderUI({
       if (is.null(data())) return()
       tipify(actionButton("search_physchem", 
-                   "Search for Physchem Data",
-                   icon = icon('atom'),
-                   style = 'color: #fff; 
+                          "Physchem Search",
+                          icon = icon('atom'),
+                          style = 'color: #fff; 
                    background-color: #a44f2e; border-color: #8a2b07'),
              'Searches ChEMBL and SusDat for physiochemical data',
              placement="bottom", trigger = "hover")
     })
-    
-    #Display the collected information
-    output$TBL1 <- renderDataTable(data(),
-                                   rownames = FALSE,
-                                   extensions = list('Scroller' = NULL),
-                                   options = list(
-                                     #deferRender = TRUE,
-                                       scroller = TRUE,
-                                       scrollX = TRUE,
-                                       scrollY = '300px',
-                                       searching = TRUE,
-                                       fixedColumns = TRUE,
-                                       autoWidth = FALSE,
-                                       #ordering = TRUE,
-                                       scrollCollapse= TRUE,
-                                       dom = 'tB'
-                                   ))
     
     chembl_data <- eventReactive(input$search_physchem, {
         #query the chembl database
@@ -744,20 +1241,39 @@ server <- function(input, output, session) {
     
     output$TBL2 <- renderDataTable(sus_data(),
                                    rownames = FALSE,
-                                   extensions = list('Scroller' = NULL),
+                                   extensions = 'Buttons',
                                    options = list(
-                                     #deferRender = TRUE,
-                                     #paging = TRUE,
-                                     scroller = TRUE,
-                                     scrollX = TRUE,
-                                     scrollY = '300px',
+                                     paging = FALSE,
                                      searching = TRUE,
-                                     fixedColumns = TRUE,
-                                     autoWidth = FALSE,
-                                     #ordering = TRUE,
-                                     scrollCollapse= TRUE,
-                                     dom = 'tB'
+                                     ordering = TRUE,
+                                     #scrollCollapse= TRUE,
+                                     dom = 'l<"sep">Bfrtip',
+                                     buttons = c('csv', 'excel')
                                    ))
+    
+    output$physchem_tbl_2 <- renderDataTable(sus_data(),
+                                             rownames = FALSE,
+                                             extensions = 'Buttons',
+                                             options = list(
+                                               paging = FALSE,
+                                               searching = TRUE,
+                                               ordering = TRUE,
+                                               #scrollCollapse= TRUE,
+                                               dom = 'l<"sep">Bfrtip',
+                                               buttons = c('csv', 'excel')
+                                             ))
+    
+    output$physchem_tbl_3 <- renderDataTable(sus_data(),
+                                             rownames = FALSE,
+                                             extensions = 'Buttons',
+                                             options = list(
+                                               paging = FALSE,
+                                               searching = TRUE,
+                                               ordering = TRUE,
+                                               #scrollCollapse= TRUE,
+                                               dom = 'l<"sep">Bfrtip',
+                                               buttons = c('csv', 'excel')
+                                             ))
     
 
     nf_compounds <- eventReactive(c(input$search_physchem, input$include_compounds),{
@@ -770,21 +1286,14 @@ server <- function(input, output, session) {
     
     output$TBL6 <- renderDataTable(nf_compounds(),
                                    rownames = FALSE,
-                                   extensions = list('Buttons'= NULL,
-                                                     'Scroller' = NULL),
+                                   extensions = 'Buttons',
                                    options = list(
-                                     #deferRender = TRUE,
-                                     #paging = TRUE,
-                                     scroller = TRUE,
-                                     scrollX = TRUE,
-                                     scrollY = '300px',
+                                     paging = FALSE,
                                      searching = TRUE,
-                                     fixedColumns = TRUE,
-                                     autoWidth = TRUE,
-                                     #ordering = TRUE,
-                                     scrollCollapse= TRUE,
-                                     dom = 'tB',
-                                     buttons = c('csv')
+                                     ordering = TRUE,
+                                     #scrollCollapse= TRUE,
+                                     dom = 'l<"sep">Bfrtip',
+                                     buttons = c('csv', 'excel')
                                    ))
     
     acd_data <- eventReactive(c(input$refresh_physchem,input$upload_ACD_labs),{
@@ -795,19 +1304,14 @@ server <- function(input, output, session) {
     
     output$TBL7 <- renderDataTable(acd_data(),
                                    rownames = FALSE,
-                                   extensions = list('Scroller' = NULL),
+                                   extensions = 'Buttons',
                                    options = list(
-                                     #deferRender = TRUE,
-                                     #paging = TRUE,
-                                     scroller = TRUE,
-                                     scrollX = TRUE,
-                                     scrollY = '300px',
+                                     paging = FALSE,
                                      searching = TRUE,
-                                     fixedColumns = TRUE,
-                                     autoWidth = FALSE,
-                                     #ordering = TRUE,
-                                     scrollCollapse= TRUE,
-                                     dom = 'tB'
+                                     ordering = TRUE,
+                                     #scrollCollapse= TRUE,
+                                     dom = 'l<"sep">Bfrtip',
+                                     buttons = c('csv', 'excel')
                                    ))
     
     output$expdummy<-reactive(!is.null(input$file2))
@@ -836,26 +1340,45 @@ server <- function(input, output, session) {
     })
     
     out_of_range_values <- eventReactive(input$search_physchem,{
-      #query the epi suite database
+      #find out of range Peff values
       OutOfRange_PSA_HBD(physchem_data())
     })
     
     output$TBL_out_of_range <- renderDataTable(out_of_range_values(),
                                                rownames = FALSE,
-                                               extensions = list('Scroller' = NULL),
+                                               extensions = 'Buttons',
                                                options = list(
-                                                 #deferRender = TRUE,
-                                                 #paging = TRUE,
-                                                 scroller = TRUE,
-                                                 scrollX = TRUE,
-                                                 scrollY = '300px',
+                                                 paging = FALSE,
                                                  searching = TRUE,
-                                                 fixedColumns = TRUE,
-                                                 autoWidth = FALSE,
-                                                 #ordering = TRUE,
-                                                 scrollCollapse= TRUE,
-                                                 dom = 'tB'
-                                               )) 
+                                                 ordering = TRUE,
+                                                 #scrollCollapse= TRUE,
+                                                 dom = 'l<"sep">Bfrtip',
+                                                 buttons = c('csv', 'excel')
+                                               ))
+    
+    output$TBL_out_of_range2 <- renderDataTable(out_of_range_values(),
+                                               rownames = FALSE,
+                                               extensions = 'Buttons',
+                                               options = list(
+                                                 paging = FALSE,
+                                                 searching = TRUE,
+                                                 ordering = TRUE,
+                                                 #scrollCollapse= TRUE,
+                                                 dom = 'l<"sep">Bfrtip',
+                                                 buttons = c('csv', 'excel')
+                                               ))
+    
+    output$TBL_out_of_range3 <- renderDataTable(out_of_range_values(),
+                                                rownames = FALSE,
+                                                extensions = 'Buttons',
+                                                options = list(
+                                                  paging = FALSE,
+                                                  searching = TRUE,
+                                                  ordering = TRUE,
+                                                  #scrollCollapse= TRUE,
+                                                  dom = 'l<"sep">Bfrtip',
+                                                  buttons = c('csv', 'excel')
+                                                ))
 
     httk_only_data <- eventReactive(input$search_httk_db,{
       #query the httk database
@@ -901,20 +1424,25 @@ server <- function(input, output, session) {
     #Display the collected information
     output$TBL3 <- renderDataTable(experimental_data(),
                                    rownames = FALSE,
-                                   extensions = list('Buttons'= NULL, 
-                                                     'Scroller' = NULL),
+                                   extensions = 'Buttons',
                                    options = list(
-                                     #deferRender = TRUE,
-                                     #paging = TRUE,
-                                     scroller = TRUE,
-                                     scrollX = TRUE,
-                                     scrollY = '300px',
+                                     paging = FALSE,
                                      searching = TRUE,
-                                     fixedColumns = TRUE,
-                                     autoWidth = TRUE,
-                                     #ordering = TRUE,
-                                     scrollCollapse= TRUE,
-                                     dom = 'tB',
+                                     ordering = TRUE,
+                                     #scrollCollapse= TRUE,
+                                     dom = 'l<"sep">Bfrtip',
+                                     buttons = c('csv', 'excel')
+                                   ))
+    
+    output$exp_dat_tbl_2 <- renderDataTable(experimental_data(),
+                                   rownames = FALSE,
+                                   extensions = 'Buttons',
+                                   options = list(
+                                     paging = FALSE,
+                                     searching = TRUE,
+                                     ordering = TRUE,
+                                     #scrollCollapse= TRUE,
+                                     dom = 'l<"sep">Bfrtip',
                                      buttons = c('csv', 'excel')
                                    ))
     
@@ -927,6 +1455,10 @@ server <- function(input, output, session) {
                         Input_Dose = input$dose_value, UNITS = input$dose_units,
                         info = data(), admin_route = input$administration_route)
 
+    })
+    
+    observe({
+      lol <<- organised_data()
     })
     
     predicted_variables <- eventReactive(input$predict_params_button,{
@@ -973,15 +1505,19 @@ server <- function(input, output, session) {
                        formulation_density = input$dermal_formulation_density,
                        
                        #multiple dosing options
-                       multiple_dosing = multiple_dosing_flag(), 
+                       multiple_dosing = F,#multiple_dosing_flag(), there is an issue with multiple dosing
                        Num_doses = as.numeric(input$num_doses_val), 
                        dose_interval = as.numeric(input$dosing_interval_val)
                        )
     })
     
-    observe({
-      obs_data <<- output_profiles()
-    })
+    
+    #additional params
+    #oliveoil_water_for_NLP = T
+    
+    # observe({
+    #   obs_data <<- output_profiles()
+    # })
     
     simcyp_outputs <- eventReactive(input$simulate_button, {
       #All data in simcyp
@@ -991,6 +1527,18 @@ server <- function(input, output, session) {
     summary_outputs <- eventReactive(input$simulate_button, {
       #Summary data in simcyp
       suppressWarnings(SummaryOutputs(simcyp_outputs()))
+    })
+    
+    static_predicted_params <- eventReactive(input$simulate_button, {
+      #Extract non-population dependant parameters
+      StaticPredictedParameters(summary_outputs())
+    })
+    
+    
+    #these are the summary simcyp outputs and the static parameters in one place
+    all_summary_outputs <- eventReactive(input$simulate_button, {
+      fin_data <- cbind(summary_outputs(),rm_df_cols(static_predicted_params(),c('Code')))
+      fin_data
     })
     
     #generate the compound codes after hitting the simulate button
@@ -1069,11 +1617,21 @@ server <- function(input, output, session) {
                   choices = compound_codes())
     })
     
+    output$compound_lists3<- renderUI({
+      #generate drop_down lists of compound codes
+      selectInput('comp_code3', 'Compound Code',
+                  choices = compound_codes())
+    })
+    
     output$tissue_lists<- renderUI({
       #generate drop_down lists of compound codes
       selectInput('tissue', 'Tissue Type',
                   choices = tissue_types(), selected = 'PLASMA')
     })
+    
+    ############################################################
+    #                   Plotting Outputs                       #
+    ############################################################
     
     output$conc_time_plot <- renderPlot({
       plot_profile(input$comp_code, output_profiles(), tissue_type = input$tissue,
@@ -1081,19 +1639,267 @@ server <- function(input, output, session) {
            logy = input$log_scale)
     })
     
+    #allow user to download outputs
+    output$DownloadConcPlot<- downloadHandler(
+      #Specify The File Name 
+      filename = 'Concentration-Time Profile.png',
+      content = function(file){
+        # open the format of file which needs to be downloaded ex: pdf, png etc. 
+        png(file, res = 300, height = 12, width = 15, units = "in")
+        
+        print(plot_profile(input$comp_code, output_profiles(), tissue_type = input$tissue,
+                           units=input$unit, curated_data = experimental_data(), 
+                           logy = input$log_scale))
+        
+        dev.off()
+      }
+    )
+    
     output$comp_comparison_plot <- renderPlot({
-      compare_simulated_compound(summary_outputs(),
+      compare_simulated_compound(all_summary_outputs(),
                    parameter=input$sim_parameters, bar_col = input$plot_col_2, 
                    bar_order = input$param_order)
     })
+    
+    #allow user to download outputs
+    output$CompComparPlot<- downloadHandler(
+      #Specify The File Name 
+      filename = 'Cross-compound Comparison Plot.png',
+      content = function(file){
+        # open the format of file which needs to be downloaded ex: pdf, png etc. 
+        png(file, res = 300, height = 12, width = 15, units = "in")
+        
+        output$comp_comparison_plot <- renderPlot({
+          compare_simulated_compound(all_summary_outputs(),
+                                     parameter=input$sim_parameters, bar_col = input$plot_col_2, 
+                                     bar_order = input$param_order)
+        })
+        
+        dev.off()
+      }
+    )
 
-    output$additional_plot <- renderPlot({
+    output$distribution_plot <- renderPlot({
       plot_parameters(simcyp_outputs(), Compound = input$comp_code2,
-                      plot_type = input$plot_type,
-                      x_variable = input$x_axis_var,
-                      y_variable = input$y_axis_var,
+                      plot_type = 'Distribution',
+                      x_variable = input$x_axis_var1,
+                      y_variable = 'Age',
                       chosen_col = input$plot_col)
     })
+    
+    #allow user to download outputs
+    output$DownloaddistPlot<- downloadHandler(
+      #Specify The File Name 
+      filename = 'Distribution Plot.png',
+      content = function(file){
+        # open the format of file which needs to be downloaded ex: pdf, png etc. 
+        png(file, res = 300, height = 12, width = 15, units = "in")
+        
+        output$distribution_plot <- renderPlot({
+          plot_parameters(simcyp_outputs(), Compound = input$comp_code2,
+                          plot_type = 'Distribution',
+                          x_variable = input$x_axis_var1,
+                          y_variable = 'Age',
+                          chosen_col = input$plot_col)
+        })
+        
+        dev.off()
+      }
+    )
+    
+    output$relationship_plot <- renderPlot({
+      plot_parameters(simcyp_outputs(), Compound = input$comp_code3,
+                      plot_type = 'Relationship',
+                      x_variable = input$x_axis_var2,
+                      y_variable = input$y_axis_var,
+                      chosen_col = input$plot_col2)
+    })
+    
+    
+    #allow user to download outputs
+    output$DownloadrlnPlot<- downloadHandler(
+      #Specify The File Name 
+      filename = 'Relationship Plot.png',
+      content = function(file){
+        # open the format of file which needs to be downloaded ex: pdf, png etc. 
+        png(file, res = 300, height = 12, width = 15, units = "in")
+        
+        output$relationship_plot <- renderPlot({
+          plot_parameters(simcyp_outputs(), Compound = input$comp_code3,
+                          plot_type = 'Relationship',
+                          x_variable = input$x_axis_var2,
+                          y_variable = input$y_axis_var,
+                          chosen_col = input$plot_col2)
+        })
+        
+        dev.off()
+      }
+    )
+    
+    
+    output$physchem_prediction_comparison_plot <- renderPlot({
+      PhyschemvsPredictedParamsPlot(organised_data(), all_summary_outputs(),
+                                    predicted_param = input$pred_parameters,
+                                    physchem_param = input$physchem_parameters,
+                                    plot_colour = input$plot_col3)
+    })
+    
+
+    #allow user to download outputs
+    output$DownloadphyschemCompCmparPlot<- downloadHandler(
+      #Specify The File Name 
+      filename = 'Physchem vs. Predicted Param Plot.png',
+      content = function(file){
+        # open the format of file which needs to be downloaded ex: pdf, png etc. 
+        png(file, res = 300, height = 12, width = 15, units = "in")
+        
+        output$physchem_prediction_comparison_plot <- renderPlot({
+          PhyschemvsPredictedParamsPlot(organised_data(), all_summary_outputs(),
+                                        predicted_param = input$pred_parameters,
+                                        physchem_param = input$physchem_parameters,
+                                        plot_colour = input$plot_col3)
+        })
+        
+        dev.off()
+      }
+    )
+    
+    ############################################################
+    #                    SIVA Outputs                          #
+    ############################################################
+    
+    SIVA_inputs <- reactive({
+      SIVA_input_file <- input$SIVA_file
+      req(SIVA_input_file)
+      SIVA_input_file$datapath
+    })
+    
+    SIVA_collected_data <- eventReactive(input$search_SIVA_data, {
+      #incorporate findings from experimental data
+      SIVA_inputs <- input$SIVA_file
+      req(SIVA_inputs)
+      SIVA_data_collection(filename = SIVA_inputs$datapath)
+    })
+    
+    #inform user of any missing data in the description blocks
+    output$missing_comp_num <- renderText({ Missing_compound_check(SIVA_inputs(),SIVA_collected_data()) })
+    output$missing_hlc_num <- renderText({ Missing_HLC_check(SIVA_collected_data()) })
+    output$duplicated_comp_num <- renderText({ duplicated_compounds_check(SIVA_collected_data()) })
+    
+    SIVA_updated_data <- eventReactive(input$update_SIVA_data,{
+      SIVA_input_file <- input$SIVA_file_reupload
+      req(SIVA_input_file)
+      SIVA_updated_file_path <- SIVA_input_file$datapath
+      
+      if (file.exists(SIVA_updated_file_path)) {
+        
+        #extract file extensions
+        extension <- file_ext(SIVA_updated_file_path)
+        
+      } else {
+        
+        return(cat("The file does not exist"))
+        
+      }
+      
+      #load the data based on the extracted extension
+      if (extension == 'xlsx'){
+        
+        import<-loadWorkbook(SIVA_updated_file_path, create=FALSE)
+        ICD <- readWorksheet(import,  header = TRUE, sheet = 1)
+        
+      } else if (extension == 'csv'){
+        
+        ICD <- read.csv(SIVA_updated_file_path, header = T, sep = ',')
+        
+      } else {
+        
+        return(cat("File type not compatible."))
+        
+      }
+      ICD
+    })
+    
+    SIVA_curated_data_final<-eventReactive(c(input$search_SIVA_data,input$update_SIVA_data),{
+      
+      SIVA_reupload <- input$SIVA_file_reupload
+      #print(file3)
+      
+      if(!is.null(SIVA_reupload)){
+        
+        return(SIVA_updated_data())
+        
+        
+      } else{
+        
+        return(SIVA_collected_data())
+        
+      }
+    })
+    
+    #Display the collected information
+    output$SIVA_curated_data_tbl <- renderDataTable(SIVA_curated_data_final(),
+                                                    rownames = FALSE,
+                                                    extensions = 'Buttons',
+                                                    options = list(
+                                                      paging = FALSE,
+                                                      searching = TRUE,
+                                                      ordering = TRUE,
+                                                      #scrollCollapse= TRUE,
+                                                      dom = 'l<"sep">Bfrtip',
+                                                      buttons = c('csv', 'excel')
+                                                    ))
+    
+    observe({
+      obs_data <<- SIVA_curated_data_final()
+    })
+    
+    
+    #Calculate the SIVA predictions
+    SIVA_predictions <- eventReactive(input$predict_iv_distribution, {
+
+      InVitroDistribution(ICD = SIVA_curated_data_final(), 
+                          Cinitial = input$nominal_conc, ncell = input$number_cells, 
+                          Vwell = input$vol_well, pH_medium = input$medium_pH,
+                          f_serum =input$serum_fraction, Sysdiameter = input$well_diameter,
+                          save.csv = F)
+    })
+    
+    #Display the predicted outputs
+    output$SIVA_output_tbl <- renderDataTable(SIVA_predictions(),
+                                                    rownames = FALSE,
+                                                    extensions = 'Buttons',
+                                              options = list(
+                                                paging = FALSE,
+                                                searching = TRUE,
+                                                ordering = TRUE,
+                                                #scrollCollapse= TRUE,
+                                                dom = 'l<"sep">Bfrtip',
+                                                buttons = c('csv', 'excel')
+                                              ))
+    
+    #plot the SIVA output plots
+    output$SIVA_output_plots <- renderPlot({
+      SIVA_plots(SIVA_collected_data(), SIVA_predictions())
+    })
+    
+    #allow user to download SIVA outputs
+    output$Cat10<- downloadHandler(
+      #Specify The File Name 
+      filename = 'In Vitro Distribution Plots.png',
+      content = function(file){
+        # open the format of file which needs to be downloaded ex: pdf, png etc. 
+        png(file, res = 300, height = 4, width = 15, units = "in")
+        
+        print(SIVA_plots(SIVA_collected_data(), SIVA_predictions()))
+        
+        dev.off()
+      }
+    )
+    
+    ############################################################
+    #                       Help Page                          #
+    ############################################################
     
     output$HelpPageText <- renderUI ({
 

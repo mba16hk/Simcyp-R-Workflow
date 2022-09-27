@@ -264,7 +264,7 @@ match.df <- function(df1, df2, colnames_to_match){
 #identify the out-of range PSA and HBD values
 OutOfRange_PSA_HBD <- function (collected_data){
   
-  columns_of_interest <- keep_df_cols(collected_data,c('Code','MW','PSA','HBD','CS_code','logPow'))
+  columns_of_interest <- keep_df_cols(collected_data,c('Code','CODE','MW','PSA','HBD','CS_code','logPow'))
   
   # The mandatory out of ranges for PSA and HBD
   OutOfRange_PSA_idx <- which(columns_of_interest$PSA>154.4 | columns_of_interest$PSA<16.2)
