@@ -17,12 +17,12 @@ MissingInformation <- function(info, not_found_chembl,episuite_data, missing_inf
     missing_inchi<-episuite_data$InChIKey[both_missing]
     #missing_codes <- episuite_data$Code[both_missing]
     
-    compounds_with_missing_info <- filter(info,info$InChiKey %in% missing_inchi)
+    compounds_with_missing_info <- filter(info,info$INCHIKEY %in% missing_inchi)
     compounds_with_missing_info <- keep_df_cols(compounds_with_missing_info,
-                                                c('Code', 'SMILES'))
+                                                c('CODE', 'SMILES'))
     compounds_with_missing_info$Status <- 'Missing Infomation'
     missing_and_nf_compounds<-rbind(compounds_with_missing_info, not_found_compounds)
-    missing_and_nf_compounds <- missing_and_nf_compounds %>% relocate(Status, .before = Code)
+    missing_and_nf_compounds <- missing_and_nf_compounds %>% relocate(Status, .before = CODE)
     
     return(missing_and_nf_compounds)
     
@@ -30,7 +30,7 @@ MissingInformation <- function(info, not_found_chembl,episuite_data, missing_inf
     
     missing_compounds <- NotFoundInsusdat(not_found_chembl, episuite_data)
     missing_compounds$Status <- 'Missing Compound'
-    missing_compounds <- missing_compounds %>% relocate(Status, .before = Code)
+    missing_compounds <- missing_compounds %>% relocate(Status, .before = CODE)
     
     return(missing_compounds)
     
@@ -69,7 +69,7 @@ AdditionalData <- function (info, additional_data_directory, sus_data,
   
   #incorporate data to the physiochemical information from chembl and sus_data
   x <- merge(sus_data, additional_data,
-             by.x = c('Code'), by.y = 'CODE', all= T)
+             by= 'CODE', all= T)
   
   #Do not overwrite values extracted by susDat/chembl and copy over data
   if (override_existing_data == F){
@@ -149,16 +149,16 @@ AdditionalData <- function (info, additional_data_directory, sus_data,
   x <- x %>% rename(HBD = HBD.x)
   
   #import the identifier values for newly found info
-  missing_identifier1<-which(is.na(x$InChIKey))
+  missing_identifier1<-which(is.na(x$INCHIKEY))
   missing_identifier2<-which(is.na(x$SMILES))
   missing_identifier3<-which(is.na(x$COMPOUND.NAME))
   
   missing_identifiers <- unique(c(missing_identifier1, missing_identifier2,missing_identifier3))
-  missing_compounds<-x$Code[missing_identifiers]
-  indicies <- which(info$Code %in% missing_compounds)
+  missing_compounds<-x$CODE[missing_identifiers]
+  indicies <- which(info$CODE %in% missing_compounds)
   missing_information <- info[indicies,]
   
-  y <- merge(x,missing_information, by=c('Code'),all=T)
+  y <- merge(x,missing_information, by=c('CODE'),all=T)
   
   y$SMILES.x <- ifelse(!is.na(y$SMILES.y)&is.na(y$SMILES.x),
                        y$SMILES.y, y$SMILES.x)

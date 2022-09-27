@@ -285,18 +285,21 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   
   #if there is only 1 fu source no need to apply an operation on it, therefore only report 1 source without operation  
   httk_data$fu_source <- fu_sources
-  for (i in 1:nrow(httk_data)){
-    
-    if (is.na(httk_data$fu_source[i])){
-      next
-    }
-    
-    if (str_detect(httk_data$fu_source[i],'&')){
-      httk_data$fu_source[i] <- paste('httk:', fu_operation, 'of', httk_data$fu_source[i], sep=' ')
+  
+  if (fu_operation != 'None'){
+    for (i in 1:nrow(httk_data)){
       
-    } else {
-      httk_data$fu_source[i] <- paste('httk:', httk_data$fu_source[i], sep=' ')
+      if (is.na(httk_data$fu_source[i])){
+        next
+      }
       
+      if (str_detect(httk_data$fu_source[i],'&')){
+        httk_data$fu_source[i] <- paste('httk:', fu_operation, 'of', httk_data$fu_source[i], sep=' ')
+        
+      } else {
+        httk_data$fu_source[i] <- paste('httk:', httk_data$fu_source[i], sep=' ')
+        
+      }
     }
   }
   
@@ -526,8 +529,8 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   
   #merge the httk_data_inchi with the data curated from ChEMBL/sus dat
   physchem_httk <- merge(physchem_data, httk_data_inchi,
-                         by.x = c('InChIKey','Code',additional_names), 
-                         by.y = c('StdInChIKey','Code',additional_names),
+                         by.x = c('InChIKey','CODE',additional_names), 
+                         by.y = c('StdInChIKey','CODE',additional_names),
                          all = T)
   
   if (chem_phys_in_vitro == T){
@@ -602,7 +605,7 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   physchem_httk <- rm_df_cols(physchem_httk, rmv)
 
   #order based on compound codes
-  physchem_httk <- physchem_httk[order(physchem_httk$Code),]
+  physchem_httk <- physchem_httk[order(physchem_httk$CODE),]
 
   #oraganise data set
   if ('DOSE' %in% colnames(physchem_httk)){

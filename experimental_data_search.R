@@ -20,9 +20,9 @@ ExpDataSearch <- function (httk_data, experimental_data_directory,
   }
   
   #inchikeys and case-study IDs
-  inchi_CSID <- keep_df_cols(httk_data,c('InChIKey','Code'))
+  inchi_CSID <- keep_df_cols(httk_data,c('InChIKey','CODE'))
   exp_data <- merge (exp_data, inchi_CSID,
-                     by.y = 'Code' , by.x = 'CODE' , all.x = T)
+                     by = 'CODE' , all.x = T)
   
   # Extract CLint, fu, BP data with their inchi Keys
   relevant_exp_data <- keep_df_cols(exp_data, c('InChIKey','CLINT',
@@ -169,7 +169,7 @@ ExpDataSearch <- function (httk_data, experimental_data_directory,
   httk_exp_data$COMPOUND.NAME <- toupper(httk_exp_data$COMPOUND.NAME)
   
   #organise in ascending CS number
-  httk_exp_data <- httk_exp_data[order(httk_exp_data$Code),]
+  httk_exp_data <- httk_exp_data[order(httk_exp_data$CODE),]
 
   return(httk_exp_data)
 
