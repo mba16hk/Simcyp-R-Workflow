@@ -236,7 +236,7 @@ PhyschemvsPredictedParamsPlot <- function(physchem_data,summary_simcyp,physchem_
   #collate all data
   df <- as.data.frame(cbind(order_by_code_x$CS_code,x_variable,y_variable))
   
-  if(physchem_param=='Compound_type'){
+  if(physchem_param=='Compound_type'|physchem_param=='HBD'){
     
     #create a tab to count observations in each bin
     data_count <- count(df,x_variable)

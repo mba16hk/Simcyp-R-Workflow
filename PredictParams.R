@@ -26,10 +26,11 @@ PredictParameters <- function(Compound_dataframe){
   
   Predicted_params<-data.frame()
   kd_vals <- data.frame()
+  BP <- c()
   
   for (i in 1:nrow(Compound_dataframe)){
     Compound <- Compound_dataframe[i,]
-    Set_parameters(Compound, trials = 1, subjects=1, Time=3)
+    Set_parameters(Compound, trials = 1, subjects=1, Time=3, oliveoil_water_for_NLP = T)
     
     # Create the Database file name, with DB Extension
     DBfilename <- paste( Compound$CS_code,".db",sep="")
@@ -41,12 +42,15 @@ PredictParameters <- function(Compound_dataframe){
     
     # Run simulation, suppress all console output 
     SetParameter("idSeedVariable", 3, 0, 4) #seed 0
-    #print('Seed is set')
-    
     capture.output(Simcyp::Simulate(database=DBfilepath), file='NUL')
-    #print('Simulation Complete')
     
-   
+    #extract BP data
+    info_to_extract <- RSQLite::dbConnect(SQLite(),DBfilepath)   #DBfilepath
+    BP[i] <- GetAllCompoundResults_DB('idbpAdj', compound = CompoundID$Substrate, info_to_extract) # BP ratio
+    
+    #Detach database connection
+    RSQLite::dbDisconnect(info_to_extract)
+  
   }
   
   #Finished with the engine
@@ -55,40 +59,9 @@ PredictParameters <- function(Compound_dataframe){
   simcyp_outputs <- AdditionalOutputs(Compound_dataframe)
   summary_simcyp <-SummaryOutputs(simcyp_outputs)
   
-  #extract Kd values
-  for (j in 1:length(summary_simcyp$CS_code)){
-    DBfilename <- paste(summary_simcyp$CS_code[j],".db",sep="")
-    kd_vals <- rbind(kd_vals,ExtractKD(DBfilename))
-  }
-  
-  
-  Predicted_params<- as.data.frame(cbind(summary_simcyp$CS_code,
-                           summary_simcyp$Fu_plasma,
-                           summary_simcyp$Vss,
-                           summary_simcyp$BP,
-                           kd_vals))
-  colnames(Predicted_params)<-c("Code",
-                                "Predicted Fu",
-                                "Predicted Vss",
-                                "Predicted BP",
-                                "Predicted HSA Kd",
-                                "Predicted AGP Kd")
+  Predicted_params <- StaticPredictedParameters(summary_simcyp)
+  Predicted_params$`Predicted BP ratio` <- BP
   
   return(Predicted_params)
 }
 
-#find predicted kd values (regardless if AGP or HSA)
-ExtractKD <- function(DBfilename){
-  
-  ## connect to ChEMBL SQL database
-  CompoundDB <- dbConnect(dbDriver("SQLite"), dbname = DBfilename)
-  
-  ## extract KD values
-  KD <- dbSendQuery(conn = CompoundDB, "SELECT PredictedHSA_KD, PredictedAGP_KD FROM CompPredictedValues")
-  Kd_vals <- data.frame(dbFetch(KD))
-  dbClearResult(KD)
-  RSQLite::dbDisconnect(CompoundDB)
-  
-  return(Kd_vals)
-  
-}
