@@ -67,11 +67,24 @@ InChIKey_search  <- function(filenamedb,query)
   tmp <- merge(NAMES, STRUCTURES, by = "molregno", all = TRUE)
   results <- merge(tmp, PROPERTIES, by.x = "molregno", by.y = "molregno", all = TRUE)
   
+  #identify compounds with quaternary nitrogens
+  #quary_call <- paste("SELECT molregno FROM compound_structural_alerts WHERE alert_id = ",)
+  quat_N <- dbSendQuery(conn = ChEMBLDB, "SELECT molregno FROM compound_structural_alerts WHERE (alert_id IN (16,42,138,139,140,1002,1005) AND molregno = ?)")
+  dbBind(quat_N, list(results$molregno))
+  QUATERNARY_NITROGENS <- data.frame(dbFetch(quat_N))
+  dbClearResult(quat_N)
+  
   ## use the full vs freebase MW to check what is returned from search
   
   X <- c("Molregno","COMPOUND NAME", "ChEMBL ID", "InChIKey","Standard Inchi" ,"SMILES", "MWfreebase", "MW", 
          "logPow", 'logD',"Compound type","Acidic  pKa", "Basic pKa", "PSA", "HBD", "Molecular_Formula")
   colnames(results) <- X
+  
+  ## add the quaternary nitroges into the reults table
+  compounds_quat_N <- which(results$Molregno %in% QUATERNARY_NITROGENS$molregno)
+  quat_N <- rep("F",nrow(results))
+  quat_N[compounds_quat_N]<-"T"
+  results$quaternary_nitrogens <- quat_N
   
   results <- transform(results, test = ifelse(MWfreebase == MW, "OK", "CHECK"))
   RSQLite::dbDisconnect(ChEMBLDB)
@@ -262,32 +275,44 @@ match.df <- function(df1, df2, colnames_to_match){
 }
 
 #identify the out-of range PSA and HBD values
-OutOfRange_PSA_HBD <- function (collected_data){
+OutOfRange_Parameter <- function (collected_data){
   
   columns_of_interest <- keep_df_cols(collected_data,c('Code','CODE','MW','PSA','HBD','CS_code','logPow'))
   
-  # The mandatory out of ranges for PSA and HBD
+  # The mandatory out of ranges for PSA and HBD for Peff
   OutOfRange_PSA_idx <- which(columns_of_interest$PSA>154.4 | columns_of_interest$PSA<16.2)
   out_of_range_PSA <- ifelse(columns_of_interest$PSA>154.4 | columns_of_interest$PSA<16.2, 'PSA', NA)
   OutOfRange_HBD_idx <- which(columns_of_interest$HBD>5 | columns_of_interest$HBD<0)
   out_of_range_HBD <- ifelse(columns_of_interest$HBD>5 | columns_of_interest$HBD<0, 'HBD', NA)
   
-  # The out of ranges for MW and LogP
+  # The out of ranges for MW and LogP for Peff
   OutOfRange_MW_idx <- which(columns_of_interest$MW>455 | columns_of_interest$MW<60)
   out_of_range_MW <- ifelse(columns_of_interest$MW>455 | columns_of_interest$MW<60, 'MW', NA)
   OutOfRange_logP_idx <- which(columns_of_interest$logPow>4 | columns_of_interest$logPow<c(-3))
   out_of_range_logP <- ifelse(columns_of_interest$logPow>4 | columns_of_interest$logPow<c(-3), 'logP', NA)
   
+  # The out of ranges for MW for fu prediction
+  OutofRange_MW_fu_idx <- which(columns_of_interest$MW>825 | columns_of_interest$MW<75)
+  out_of_range_MW_fu <- ifelse(columns_of_interest$MW>825 | columns_of_interest$MW<75, 'MW', NA)
+  
   columns_of_interest <- cbind(columns_of_interest,out_of_range_PSA,out_of_range_HBD,
-                                                     out_of_range_MW,out_of_range_logP)
+                                                     out_of_range_MW,out_of_range_logP,out_of_range_MW_fu)
   
   # out of range data frame
   out_of_range <- columns_of_interest[unique(c(OutOfRange_PSA_idx,OutOfRange_HBD_idx,
-                                        OutOfRange_MW_idx,OutOfRange_logP_idx)),]
+                                        OutOfRange_MW_idx,OutOfRange_logP_idx,OutofRange_MW_fu_idx)),]
+  
+  #out of range parameter
+  out_of_range$Affected_Parameter <- NA
+  out_of_range$Affected_Parameter <- ifelse(!is.na(out_of_range$out_of_range_PSA)|!is.na(out_of_range$out_of_range_HBD)|
+                                            !is.na(out_of_range$out_of_range_MW)| !is.na(out_of_range$out_of_range_logP), 'Peff', out_of_range$Affected_Parameter)
+  out_of_range$Affected_Parameter <- ifelse(!is.na(out_of_range$Affected_Parameter)& !is.na(out_of_range$out_of_range_MW_fu), 'Peff & fu', out_of_range$Affected_Parameter)
+  out_of_range$Affected_Parameter <- ifelse(is.na(out_of_range$Affected_Parameter)& !is.na(out_of_range$out_of_range_MW_fu), 'fu', out_of_range$Affected_Parameter)
+  
   
   # collapse additional columns to provide an indicator of reason of our of range
   out_of_range_indicator <- apply(out_of_range[,c('out_of_range_PSA','out_of_range_HBD',
-                                                  'out_of_range_MW','out_of_range_logP')],
+                                                  'out_of_range_MW','out_of_range_logP','out_of_range_MW_fu')],
                                   1,function(x) unique(x[!is.na(x)]))
   
   out_of_range_indicator_names <- unlist(lapply(out_of_range_indicator,
@@ -298,7 +323,7 @@ OutOfRange_PSA_HBD <- function (collected_data){
   
   #keep only columns of interest
   out_of_range <- rm_df_cols(out_of_range,c('out_of_range_PSA','out_of_range_HBD',
-                                            'out_of_range_MW','out_of_range_logP'))
+                                            'out_of_range_MW','out_of_range_logP', 'out_of_range_MW_fu'))
   
   return(out_of_range)
   

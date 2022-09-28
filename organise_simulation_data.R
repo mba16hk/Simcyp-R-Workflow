@@ -100,7 +100,7 @@ OrganiseInputData <- function (httk_exp_data, info,
 
   ## build Simcyp compound import dataframe
   CMPD_IMPORT <- data.frame( "Compound_Name" = toupper(as.character(httk_exp_data$COMPOUND.NAME)))
-  CMPD_IMPORT$CS_code <- httk_exp_data$Code
+  CMPD_IMPORT$CS_code <- httk_exp_data$CODE
   
   #If the compound has no name, use its CS code
   CMPD_IMPORT$Compound_Name <- ifelse(is.na(CMPD_IMPORT$Compound_Name), 
@@ -111,9 +111,10 @@ OrganiseInputData <- function (httk_exp_data, info,
   CMPD_IMPORT$InChiKey <- httk_exp_data$InChIKey
   
   #create a compound ID for each compound
-  CMPD_IMPORT$Compound_ID <- paste(CMPD_IMPORT$Compound_Name, " ",
-                                   "(",CMPD_IMPORT$ChEMBL_ID, "; ",
-                                   CMPD_IMPORT$InChiKey,")", sep = "")
+  # CMPD_IMPORT$Compound_ID <- paste(CMPD_IMPORT$Compound_Name, " ",
+  #                                  "(",CMPD_IMPORT$ChEMBL_ID, "; ",
+  #                                  CMPD_IMPORT$InChiKey,")", sep = "")
+  
   #set route of administration
   CMPD_IMPORT$Route <- admin_route
   
@@ -264,6 +265,11 @@ OrganiseInputData <- function (httk_exp_data, info,
                            fu_inc = ifelse(Compound_type == "Monoprotic base"| Compound_type == "Diprotic base" | Compound_type == "Neutral" | is.na(Compound_type), 
                                            calculate.fu_inc(CMPD_IMPORT$logPow), 
                                            calculate.fu_inc(CMPD_IMPORT$logD_7.4)))
+  
+  #Get the quaternary nitrogen flag
+  CMPD_IMPORT$quat_N <- httk_data$quaternary_nitrogens
+  CMPD_IMPORT$quat_N <- ifelse(is.na(CMPD_IMPORT$quat_N),FALSE,CMPD_IMPORT$quat_N)
+  
   #organise in ascending CS number
   CMPD_IMPORT <- CMPD_IMPORT[order(CMPD_IMPORT$CS_code),]
   

@@ -284,8 +284,8 @@ ui <- dashboardPage( skin = 'black',
                                     width = 12)),
                     
                     #Visualise the out or range Peff values
-                    tabPanel("Out of Range Peff",  height = "640px", width = 12,
-                            p("The Peff prediction method relies on PSA/HBS values. The models were calibrated for compounds with 60<MW<455, -3<logP<4, HBD<6 and 16.2<PSA<154.4. The following compounds have out of range parameters and may result in inaccurate predictions."),
+                    tabPanel("Out of Range Parameters",  height = "640px", width = 12,
+                            p("The Peff prediction method relies on PSA/HBD values. The models were calibrated for compounds with 60<MW<455, -3<logP<4, HBD<6 and 16.2<PSA<154.4. The following compounds have out of range parameters and may result in inaccurate predictions."),
                           column(dataTableOutput("TBL_out_of_range"),
                                 height = "640px",
                                 style = "height:640px; overflow-y: scroll",
@@ -320,8 +320,8 @@ ui <- dashboardPage( skin = 'black',
                                       width = 12)),
                       
                       #Visualise the out or range Peff values
-                      tabPanel("Out of Range Peff",  height = "640px", width = 12,
-                               p("The Peff prediction method relies on PSA/HBS values. The models were calibrated for compounds with 60<MW<455, -3<logP<4, HBD<6 and 16.2<PSA<154.4. The following compounds have out of range parameters and may result in inaccurate predictions."),
+                      tabPanel("Out of Range Parameters",  height = "640px", width = 12,
+                               p("The Peff prediction method relies on PSA/HBD values. The models were calibrated for compounds with 60<MW<455, -3<logP<4, HBD<6 and 16.2<PSA<154.4. The following compounds have out of range parameters and may result in inaccurate predictions."),
                                column(dataTableOutput("TBL_out_of_range2"),
                                       height = "640px",
                                       style = "height:640px; overflow-y: scroll",
@@ -363,8 +363,8 @@ ui <- dashboardPage( skin = 'black',
                                       width = 12)),
                       
                       #Visualise the out or range Peff values
-                      tabPanel("Out of Range Peff",  height = "640px", width = 12,
-                               p("The Peff prediction method relies on PSA/HBS values. The models were calibrated for compounds with 60<MW<455, -3<logP<4, HBD<6 and 16.2<PSA<154.4. The following compounds have out of range parameters and may result in inaccurate predictions."),
+                      tabPanel("Out of Range Parameters",  height = "640px", width = 12,
+                               p("The Peff prediction method relies on PSA/HBD values. The models were calibrated for compounds with 60<MW<455, -3<logP<4, HBD<6 and 16.2<PSA<154.4. The following compounds have out of range parameters and may result in inaccurate predictions."),
                                column(dataTableOutput("TBL_out_of_range3"),
                                       height = "640px",
                                       style = "height:640px; overflow-y: scroll",
@@ -511,15 +511,16 @@ ui <- dashboardPage( skin = 'black',
                         
                         fluidRow(
                           
-                          column(
-                            width = 4,
-                            #see if the user wants to include compounds with missing information
-                            tipify(checkboxInput("set_seed", "Set seed", TRUE),
-                                   "Unchecking would not set a seed for the simulations.",
-                                   placement="bottom", trigger = "hover"),
-                          ),
+                          # column(
+                          #   width = 4,
+                          #   #see if the user wants to include compounds with missing information
+                          #   tipify(checkboxInput("set_seed", "Set seed", TRUE),
+                          #          "Unchecking would not set a seed for the simulations.",
+                          #          placement="bottom", trigger = "hover"),
+                          # ),
                           
-                          conditionalPanel(
+                          column(
+                            width = 4,conditionalPanel(
                             condition = "output.simulate_check",
                             #Set some of simcyp's simulation parameters
                             tipify(actionButton("simulate_button",
@@ -530,7 +531,7 @@ ui <- dashboardPage( skin = 'black',
                                      border-color: #8a2b07'),#end of action button
                                    "Simulate all compounds in the Simcyp Simulator.",
                                    placement="top", trigger = "hover")
-                          )
+                          ))
                           
                         ),
 
@@ -911,7 +912,7 @@ ui <- dashboardPage( skin = 'black',
                                               selectInput('physchem_parameters', 'Physchem Parameters',
                                                           choices = list('Compound Characterisation' = 'Compound_type',
                                                                          'Molecular Weight'= 'MW',
-                                                                         'LogP'='logP',
+                                                                         'LogP'='logPow',
                                                                          'Polar Surface Area'= 'PSA',
                                                                          'Hydrogen Bond Donor Count'= 'HBD')), width = 4),
                                             
@@ -1341,7 +1342,7 @@ server <- function(input, output, session) {
     
     out_of_range_values <- eventReactive(input$search_physchem,{
       #find out of range Peff values
-      OutOfRange_PSA_HBD(physchem_data())
+      OutOfRange_Parameter(physchem_data())
     })
     
     output$TBL_out_of_range <- renderDataTable(out_of_range_values(),
@@ -1486,13 +1487,15 @@ server <- function(input, output, session) {
     multiple_dosing_flag <- eventReactive(input$simulate_button, {
       if (input$dosing_options == 'Multiple Dosing'){
         return(T)
+      }else{
+        return(F)
       }
     })
     
     output_profiles <- eventReactive(input$simulate_button, {
       #Run the simulations through Simcyp
       SimcypSimulation(organised_data(), subjects = input$subjects, #,trials = input$trials
-                       Time = as.numeric(input$sim_time), seed = input$set_seed,
+                       Time = as.numeric(input$sim_time), #seed = input$set_seed,
                        
                        #set subject parameters
                        MinAge = min(as.numeric(input$age_range)), 
@@ -1505,7 +1508,7 @@ server <- function(input, output, session) {
                        formulation_density = input$dermal_formulation_density,
                        
                        #multiple dosing options
-                       multiple_dosing = F,#multiple_dosing_flag(), there is an issue with multiple dosing
+                       multiple_dosing = multiple_dosing_flag(), 
                        Num_doses = as.numeric(input$num_doses_val), 
                        dose_interval = as.numeric(input$dosing_interval_val)
                        )

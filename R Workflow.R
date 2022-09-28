@@ -85,6 +85,8 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time, oliveoil_water_
     
     # switch to pred , use 0L to switch back to user input fu
     Simcyp::SetCompoundParameter("fu",CompoundID$Substrate, 1L ) 
+    #set the quaternary nitrogen flag
+    Simcyp::SetCompoundParameter(CompoundParameterID$QuatNSwitch,CompoundID$Substrate, info$quat_N ) 
     # predicted fu from Simcyp
     Pred_fu<-Simcyp::GetCompoundParameter("idFu2",CompoundID$Substrate)  
     
