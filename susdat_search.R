@@ -7,9 +7,15 @@ SusdatSearch <- function (info, nf_in_chembl, ChEMBL_search, logP_selection_flag
   sus_dir<-paste0(dirname(dirname(rstudioapi::getSourceEditorContext()$path)),
                   '/data_files/Norman_susdat.csv')
   
+  epi_inchi_dir <- paste0(dirname(dirname(rstudioapi::getSourceEditorContext()$path)),
+                          '/data_files/EPISUITE_INCHIKEY.csv')
+  
   #read the suspect database
   susdat<-read.csv(sus_dir,sep=',', header=T)
   colnames(susdat)[1] <- 'Norman_ID'
+  
+  #read the episuite inchikey database
+  epi_inchi<-read.csv(epi_inchi_dir,sep=',', header=T)
   
   #search the suspect database using standard inchikeys and MS ready inchikeys
   found_in_susdat<-filter(susdat, 
@@ -33,7 +39,7 @@ SusdatSearch <- function (info, nf_in_chembl, ChEMBL_search, logP_selection_flag
   }
   
   keep<-c('StdInChIKey','SMILES','Monoiso_Mass', 'Molecular_Formula', 'StdInChI',
-          'logKow_EPISuite', 'Exp_logKow_EPISuite')
+          'logKow_EPISuite', 'Exp_logKow_EPISuite','PubChem_CID','CAS_RN_Dashboard')
   found_in_susdat<- keep_df_cols(found_in_susdat, keep)
   
   #merge codes
@@ -107,7 +113,43 @@ SusdatSearch <- function (info, nf_in_chembl, ChEMBL_search, logP_selection_flag
   }
   
   rm(susdat, keep)
-
+  
+  #### use the epi inchi database
+  pubchem_data_idx <- which(epi_inchi$PUBCHEM_inchikey %in% nf_in_chembl$INCHIKEY)
+  pubchem_data <- epi_inchi[pubchem_data_idx,]
+  keep <- c('PUBCHEM_CID','EPI_SMILES','PUBCHEM_inchikey','EPI_MOLWT','EPI_KOW','EPI_KOW_TYPE',
+            'EPI_PKA','PUBCHEM_mw','PUBCHEM_polararea','PUBCHEM_hbonddonor', 'PUBCHEM_inchi', 'EPI_CAS')
+  pubchem_data <- keep_df_cols(pubchem_data,keep)
+  colnames(pubchem_data) <- c('PubChem_CID','SMILES','StdInChIKey','CAS_RN_Dashboard','EPI_MOLWT','EPI_logP','EPI_logP_Type',
+                              'PKA','PUBCHEM_mw','PSA','HBD', 'StdInChI')
+  
+  #compare molecular weight
+  pubchem_data$Monoiso_Mass <- ifelse(pubchem_data$EPI_MOLWT==pubchem_data$PUBCHEM_mw,pubchem_data$EPI_MOLWT,pubchem_data$PUBCHEM_mw)
+  pubchem_data$PKA <- ifelse(pubchem_data$EPI_MOLWT!=pubchem_data$PUBCHEM_mw,NA,pubchem_data$PKA)
+  #pubchem_data
+  
+  rm_dat <- c('EPI_MOLWT','PUBCHEM_mw')
+  pubchem_data <- rm_df_cols(pubchem_data,rm_dat)
+  
+  #merge codes
+  colnames(info) <- toupper(colnames(info))
+  code_idx <- which(info$INCHIKEY %in% pubchem_data$StdInChIKey)
+  data_codes <- info[code_idx,c('INCHIKEY','CODE')]
+  pubchem_data <- merge(pubchem_data,data_codes,
+                       by.x='StdInChIKey',by.y='INCHIKEY',all=T)
+  
+  #join the epi data with the norman data
+  
+  merged_data <- merge(pubchem_data,found_in_susdat,by=c('SMILES','Monoiso_Mass','StdInChIKey','StdInChI','PubChem_CID','CODE','CAS_RN_Dashboard'), all=T)
+  merged_data$LogP <- ifelse(is.na(merged_data$LogP) & !is.na(merged_data$EPI_logP),
+                             merged_data$EPI_logP, merged_data$LogP)
+  merged_data$data_source <- ifelse(!is.na(merged_data$LogP) & is.na(merged_data$data_source),
+                             paste0('EPI Suite (EPA) - ',merged_data$EPI_logP_Type,' Data', sep=''), merged_data$data_source)
+  merged_data$data_source <- ifelse(!is.na(merged_data$HBD),
+                                    paste0(merged_data$data_source,' & PUBCHEM', sep=''), merged_data$data_source)
+  merged_data <- rm_df_cols(merged_data,c('EPI_logP','EPI_logP_Type'))
+  
+  
   #find available columns and store in a vector in order to merge with ChEMBL data
   potential_headers <- c('DOSE','DOSEUNITS','VSSMETHOD')
   additional_names<-keep_df_cols(info,potential_headers)
@@ -119,20 +161,20 @@ SusdatSearch <- function (info, nf_in_chembl, ChEMBL_search, logP_selection_flag
   }
   
   if (nrow(ChEMBL_search)==0){
-    colnames(found_in_susdat)[1] <- 'INCHIKEY'
-    colnames(found_in_susdat)[5] <- 'MW'
-    colnames(found_in_susdat)[6] <- 'logPow'
-    found_in_susdat$MWfreebase <- NA
+    colnames(merged_data)[3] <- 'INCHIKEY'
+    colnames(merged_data)[2] <- 'MW'
+    colnames(merged_data)[11] <- 'logPow'
+    merged_data$MWfreebase <- NA
     #found_in_susdat$COMPOUND.NAME <- 
-    return(found_in_susdat)
+    return(merged_data)
   } else{
     
     #merge the susdata with the ChEMBL Search
-    ChEMBL_sus_search<-merge(ChEMBL_search, found_in_susdat,
+    ChEMBL_sus_search<-merge(ChEMBL_search, merged_data,
                              by.x = c('InChIKey', 'CODE', 'SMILES','Molecular_Formula', 'Standard.Inchi',
-                                      'MW', 'logPow','data_source', additional_names), 
+                                      'MW', 'logPow','PSA','HBD','Acidic..pKa','data_source', additional_names), 
                              by.y = c('StdInChIKey','CODE', 'SMILES','Molecular_Formula', 'StdInChI',
-                                      'Monoiso_Mass','LogP','data_source',additional_names),
+                                      'Monoiso_Mass','LogP','PSA','HBD','PKA','data_source',additional_names),
                              all= T)
     
     #repopulate SMILES
@@ -161,6 +203,9 @@ SusdatSearch <- function (info, nf_in_chembl, ChEMBL_search, logP_selection_flag
     ChEMBL_sus_search <- ChEMBL_sus_search %>% relocate(data_source, .after = HBD)
     ChEMBL_sus_search <- ChEMBL_sus_search %>% relocate(logPow, .before = logD)
     ChEMBL_sus_search <- ChEMBL_sus_search %>% relocate(Molecular_Formula, .after = SMILES)
+    ChEMBL_sus_search <- ChEMBL_sus_search %>% relocate(data_source, .after = quaternary_nitrogens)
+    ChEMBL_sus_search <- ChEMBL_sus_search %>% relocate(Acidic..pKa, .after = Basic.pKa)
+    ChEMBL_sus_search <- ChEMBL_sus_search %>% relocate(ChEMBL.ID, .after = Standard.Inchi)
     
     return(ChEMBL_sus_search)
     
@@ -229,10 +274,11 @@ CAS_and_DTXSID<- function(info){
       data <- as.data.frame(cbind(rep(multiple_CAS$StdInChIKey[i],number_of_new_CAS),
                                   Additional_CAS_numbers,
                                   rep(multiple_CAS$DTXSID[i],number_of_new_CAS),
-                                  rep(multiple_CAS$Code[i],number_of_new_CAS),
-                                  rep(multiple_CAS$Compound[i],number_of_new_CAS),
+                                  rep(multiple_CAS$CODE[i],number_of_new_CAS),
+                                  rep(multiple_CAS$COMPOUND[i],number_of_new_CAS),
                                   rep(multiple_CAS$SMILES[i],number_of_new_CAS)))
       colnames(data) <- colnames(CAS_DTXSID)
+      #print(CAS_DTXSID)
       new_data <- rbind(new_data,data)
       
     }

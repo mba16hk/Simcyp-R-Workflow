@@ -26,7 +26,7 @@ ProcessInputs <- function (file_directory){
     
   } else if (extension == 'csv'){
     
-    cmpd_data <- read.csv(file_directory, header = T, sep = ',')
+    cmpd_data <- read.csv(file_directory, header = T, sep = ',',fileEncoding = 'UTF-8-BOM')
     
   } else {
     

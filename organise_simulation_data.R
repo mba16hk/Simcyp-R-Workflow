@@ -11,7 +11,10 @@ OrganiseInputData <- function (httk_exp_data, info,
                                BP_acids = 0.55,
                                
                                #can change the threshold of base pka to assume they bind to AGP
-                               AGP_pKa_threshold = 7){
+                               AGP_pKa_threshold = 7,
+                               
+                               # Allow users to input their own fu hep values
+                               fu_hep_calc = NA){
   
   # -------------- Moleclar Weight -----------------------#
   
@@ -100,11 +103,11 @@ OrganiseInputData <- function (httk_exp_data, info,
 
   ## build Simcyp compound import dataframe
   CMPD_IMPORT <- data.frame( "Compound_Name" = toupper(as.character(httk_exp_data$COMPOUND.NAME)))
-  CMPD_IMPORT$CS_code <- httk_exp_data$CODE
+  CMPD_IMPORT$Code <- httk_exp_data$CODE
   
   #If the compound has no name, use its CS code
   CMPD_IMPORT$Compound_Name <- ifelse(is.na(CMPD_IMPORT$Compound_Name), 
-                                      as.character(CMPD_IMPORT$CS_code), 
+                                      as.character(CMPD_IMPORT$Code), 
                                       as.character(CMPD_IMPORT$Compound_Name))
   
   #keep inchikey
@@ -186,7 +189,7 @@ OrganiseInputData <- function (httk_exp_data, info,
     
   }
   
-  CMPD_IMPORT$quatN <- "No" ## ASSUMED! NEEDS A SOLUTION OR ALTERNATIVE MODEL! 
+  #CMPD_IMPORT$quatN <- "No" ## ASSUMED! NEEDS A SOLUTION OR ALTERNATIVE MODEL! 
   
   #HSA or AGP determination
   if (is.numeric(AGP_pKa_threshold)){
@@ -244,34 +247,42 @@ OrganiseInputData <- function (httk_exp_data, info,
   
   # --------------- Conduct LogD7.4 and fu_hep calculations using Kilford equations ---------
   
-  #logD values from ChEMBL are NOT used, we will rely on Kilford's calculations
-  CMPD_IMPORT$logD_7.4<-''
-  CMPD_IMPORT <- transform(CMPD_IMPORT, 
-                           logD_7.4= ifelse(CMPD_IMPORT$Compound_type != 'Neutral' &
-                                              CMPD_IMPORT$Compound_type != 'Ampholyte',
-                                            calculate.logD(CMPD_IMPORT$logPow, CMPD_IMPORT$pKa1),
-                                            NA))
+  if(is.na(fu_hep_calc)){
+    #logD values from ChEMBL are NOT used, we will rely on Kilford's calculations
+    CMPD_IMPORT$logD_7.4<-''
+    CMPD_IMPORT <- transform(CMPD_IMPORT, 
+                             logD_7.4= ifelse(CMPD_IMPORT$Compound_type != 'Neutral' &
+                                                CMPD_IMPORT$Compound_type != 'Ampholyte',
+                                              calculate.logD(CMPD_IMPORT$logPow, CMPD_IMPORT$pKa1),
+                                              NA))
+    
+    #calculate logD for ampholytes using the lowest pKa values
+    ampholytes<-which(CMPD_IMPORT$Compound_type=='Ampholyte')
+    pkas<-keep_df_cols(CMPD_IMPORT,c('pKa1','pKa2'))
+    lowest_pka_vals<- apply(pkas[ampholytes,], 1, FUN = min)
+    logD_ampholytes<-calculate.logD(CMPD_IMPORT$logPow[ampholytes],lowest_pka_vals)
+    CMPD_IMPORT$logD_7.4[ampholytes]<-logD_ampholytes
+    
+    #calculate fraction unbound in hepatocytes
+    CMPD_IMPORT$fu_inc<-''
+    CMPD_IMPORT <- transform(CMPD_IMPORT, 
+                             fu_inc = ifelse(Compound_type == "Monoprotic base"| Compound_type == "Diprotic base" | Compound_type == "Neutral" | is.na(Compound_type), 
+                                             calculate.fu_inc(CMPD_IMPORT$logPow), 
+                                             calculate.fu_inc(CMPD_IMPORT$logD_7.4)))
+  } else{
+    CMPD_IMPORT$fu_inc <- fu_hep_calc
+  }
   
-  #calculate logD for ampholytes using the lowest pKa values
-  ampholytes<-which(CMPD_IMPORT$Compound_type=='Ampholyte')
-  pkas<-keep_df_cols(CMPD_IMPORT,c('pKa1','pKa2'))
-  lowest_pka_vals<- apply(pkas[ampholytes,], 1, FUN = min)
-  logD_ampholytes<-calculate.logD(CMPD_IMPORT$logPow[ampholytes],lowest_pka_vals)
-  CMPD_IMPORT$logD_7.4[ampholytes]<-logD_ampholytes
-  
-  #calculate fraction unbound in hepatocytes
-  CMPD_IMPORT$fu_inc<-''
-  CMPD_IMPORT <- transform(CMPD_IMPORT, 
-                           fu_inc = ifelse(Compound_type == "Monoprotic base"| Compound_type == "Diprotic base" | Compound_type == "Neutral" | is.na(Compound_type), 
-                                           calculate.fu_inc(CMPD_IMPORT$logPow), 
-                                           calculate.fu_inc(CMPD_IMPORT$logD_7.4)))
-  
+ 
   #Get the quaternary nitrogen flag
-  CMPD_IMPORT$quat_N <- httk_data$quaternary_nitrogens
+  CMPD_IMPORT$quat_N <- httk_exp_data$quaternary_nitrogens
   CMPD_IMPORT$quat_N <- ifelse(is.na(CMPD_IMPORT$quat_N),FALSE,CMPD_IMPORT$quat_N)
   
-  #organise in ascending CS number
-  CMPD_IMPORT <- CMPD_IMPORT[order(CMPD_IMPORT$CS_code),]
+  
+  if (nrow(CMPD_IMPORT)>1){
+    #organise in ascending CS number
+    CMPD_IMPORT <- CMPD_IMPORT[order(CMPD_IMPORT$Code),]
+  }
   
   return(CMPD_IMPORT)
   
