@@ -1,6 +1,6 @@
 #Additional Functions
 library(stringr)
-library(XLConnect)
+library(readxl)
 library(tools)
 library(dplyr)
 library(RSQLite)
@@ -34,62 +34,6 @@ keep_df_cols <-function(df, column_names){
   #return the cleaned up dataframe
   return(df)
 }
-
-#function to query Chembl using InChiKey
-InChIKey_search  <- function(filenamedb,query)
-{
-  
-  #dbListTables(ChEMBLDB)
-  
-  ## connect to ChEMBL SQL database
-  ChEMBLDB <- dbConnect(dbDriver("SQLite"), dbname = filenamedb)
-  
-  ## identify molregno and canonical SMILES string in ChEMBLdb based on standard InChIkey
-  InChiKey <- dbSendQuery(conn = ChEMBLDB, "SELECT molregno, standard_Inchi_key, standard_inchi, canonical_smiles FROM compound_structures WHERE standard_InchI_key = ?")
-  dbBind(InChiKey, list(query))
-  STRUCTURES <- data.frame(dbFetch(InChiKey))
-  dbClearResult(InChiKey)
-  
-  ## identify preferred name and CHEMBLID based on molregno 
-  molregno <- dbSendQuery(conn = ChEMBLDB, "SELECT molregno, pref_name, chembl_id FROM molecule_dictionary WHERE molregno = ?")
-  dbBind(molregno, list(STRUCTURES$molregno))
-  NAMES <- data.frame(dbFetch(molregno))
-  dbClearResult(molregno)
-  
-  ## identify MW (freebase), MW (full), cxlogp, molecular species, cx most acidic pka, cx most basic pka, psa, hbd  
-  ## based on molregno 
-  physchem <- dbSendQuery(conn = ChEMBLDB, "SELECT molregno, mw_freebase, full_mwt, cx_logp, cx_logd, molecular_species, cx_most_apka, cx_most_bpka,
-                          psa, hbd, full_molformula FROM compound_properties WHERE molregno = ?")
-  dbBind(physchem, list(STRUCTURES$molregno))
-  PROPERTIES <- data.frame(dbFetch(physchem))
-  dbClearResult(physchem)
-  
-  tmp <- merge(NAMES, STRUCTURES, by = "molregno", all = TRUE)
-  results <- merge(tmp, PROPERTIES, by.x = "molregno", by.y = "molregno", all = TRUE)
-  
-  #identify compounds with quaternary nitrogens
-  #quary_call <- paste("SELECT molregno FROM compound_structural_alerts WHERE alert_id = ",)
-  quat_N <- dbSendQuery(conn = ChEMBLDB, "SELECT molregno FROM compound_structural_alerts WHERE (alert_id IN (16,42,138,139,140,1002,1005) AND molregno = ?)")
-  dbBind(quat_N, list(results$molregno))
-  QUATERNARY_NITROGENS <- data.frame(dbFetch(quat_N))
-  dbClearResult(quat_N)
-  
-  ## use the full vs freebase MW to check what is returned from search
-  
-  X <- c("Molregno","COMPOUND NAME", "ChEMBL ID", "InChIKey","Standard Inchi" ,"SMILES", "MWfreebase", "MW", 
-         "logPow", 'logD',"Compound type","Acidic  pKa", "Basic pKa", "PSA", "HBD", "Molecular_Formula")
-  colnames(results) <- X
-  
-  ## add the quaternary nitroges into the reults table
-  compounds_quat_N <- which(results$Molregno %in% QUATERNARY_NITROGENS$molregno)
-  quat_N <- rep("F",nrow(results))
-  quat_N[compounds_quat_N]<-"T"
-  results$quaternary_nitrogens <- quat_N
-  
-  results <- transform(results, test = ifelse(MWfreebase == MW, "OK", "CHECK"))
-  RSQLite::dbDisconnect(ChEMBLDB)
-  return(results)
-} 
 
 #Functions for Kilford Equation Calculations
 calculate.fu_inc<- function(logPorD){
@@ -277,7 +221,7 @@ match.df <- function(df1, df2, colnames_to_match){
 #identify the out-of range PSA and HBD values
 OutOfRange_Parameter <- function (collected_data){
   
-  columns_of_interest <- keep_df_cols(collected_data,c('Code','CODE','MW','PSA','HBD','CS_code','logPow'))
+  columns_of_interest <- keep_df_cols(collected_data,c('Code','CODE','MW','PSA','HBD','CXLogP'))
   
   # The mandatory out of ranges for PSA and HBD for Peff
   OutOfRange_PSA_idx <- which(columns_of_interest$PSA>154.4 | columns_of_interest$PSA<16.2)
@@ -288,8 +232,8 @@ OutOfRange_Parameter <- function (collected_data){
   # The out of ranges for MW and LogP for Peff
   OutOfRange_MW_idx <- which(columns_of_interest$MW>455 | columns_of_interest$MW<60)
   out_of_range_MW <- ifelse(columns_of_interest$MW>455 | columns_of_interest$MW<60, 'MW', NA)
-  OutOfRange_logP_idx <- which(columns_of_interest$logPow>4 | columns_of_interest$logPow<c(-3))
-  out_of_range_logP <- ifelse(columns_of_interest$logPow>4 | columns_of_interest$logPow<c(-3), 'logP', NA)
+  OutOfRange_logP_idx <- which(columns_of_interest$CXLogP>4 | columns_of_interest$CXLogP<c(-3))
+  out_of_range_logP <- ifelse(columns_of_interest$CXLogP>4 | columns_of_interest$CXLogP<c(-3), 'logP', NA)
   
   # The out of ranges for MW for fu prediction
   OutofRange_MW_fu_idx <- which(columns_of_interest$MW>825 | columns_of_interest$MW<75)
