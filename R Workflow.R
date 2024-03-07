@@ -1,13 +1,14 @@
 library(Simcyp)
 library(tidyverse) 
 
-Set_parameters <- function(Compound, trials = 1, subjects, Time, oliveoil_water_for_NLP) {
+Set_parameters <- function(Compound, trials = 1, subjects, Time, oliveoil_water_for_NLP, fu_GFR = T
+                           ) {
   
   info <- Compound
   
   #specify compoind CS ID
   message( "--------------------------------------------")
-  message( paste("Compound" , info$CS_code) )
+  message( paste("Compound" , info$Code) )
   
   # Set Parameters 
   # ---------------
@@ -19,9 +20,9 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time, oliveoil_water_
   
   #See if it's a PSA/HBD System
   if (info$Permeability_system == 'PSA/HBD'){
-    
+
     Simcyp::SetCompoundParameter(CompoundParameterID$PSARadio ,CompoundID$Substrate, 1L)
-   
+
     if (is.na(info$PSA) & is.na(info$HBD)){
       #PSA
       Simcyp::SetCompoundParameter(CompoundParameterID$PSAValue ,CompoundID$Substrate, as.numeric(0))
@@ -29,26 +30,26 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time, oliveoil_water_
       Simcyp::SetCompoundParameter(CompoundParameterID$HBDValue ,CompoundID$Substrate, as.numeric(0))
       #message('No HBD or PSA values specified. 0 values set for both.')
     } else{
-      
+
       Simcyp::SetCompoundParameter(CompoundParameterID$PSAValue ,CompoundID$Substrate, as.numeric(info$PSA))
       Simcyp::SetCompoundParameter(CompoundParameterID$HBDValue ,CompoundID$Substrate, as.numeric(info$HBD))
       #message(paste('Setting PSA to',as.numeric(info$PSA), 'and HBD to', as.numeric(info$HBD), sep = ' '))
-      
+
     }
-    
-    
+
+
   }
   
   #HSA/AGP
   if (info$HSA_AGP == 'HSA' | is.na(info$HSA_AGP)){
     SetCompoundParameter(Simcyp::CompoundParameterID$PlasmaBindingProtein,CompoundID$Substrate, as.integer(0))
-    #message(paste("Plasma Binding = HSA. Protein concentration reference value is 45 g/L ", sep="") )
+    message(paste("Plasma Binding = HSA. Protein concentration reference value is 45 g/L ", sep="") )
     SetCompoundParameter(Simcyp::CompoundParameterID$ProteinReference,CompoundID$Substrate, as.numeric(45))
     
   } else if (info$HSA_AGP == 'AGP'){
     
     SetCompoundParameter(Simcyp::CompoundParameterID$PlasmaBindingProtein,CompoundID$Substrate, as.integer(1))
-    #message(paste("Plasma Binding = AGP. Protein concentration reference value is 0.811 g/L ", sep="") )
+    message(paste("Plasma Binding = AGP. Protein concentration reference value is 0.811 g/L ", sep="") )
     SetCompoundParameter(Simcyp::CompoundParameterID$ProteinReference,CompoundID$Substrate, as.numeric(0.811))
   }
   
@@ -60,11 +61,12 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time, oliveoil_water_
   
   if (as.numeric(info$Prediction_method)==3){
     Simcyp::SetCompoundParameter(CompoundParameterID$KpPredictionMethod,CompoundID$Substrate, as.integer(Method))
-    #message(paste('Vss prediction method is set to Method', info$Prediction_method, sep= ' '))
+    message(paste('Vss prediction method is set to Method', info$Prediction_method, sep= ' '))
+    Simcyp::SetCompoundParameter(CompoundParameterID$UseOliveOilWaterSurrogateForNLP ,CompoundID$Substrate, TRUE)
   } else {
     Simcyp::SetCompoundParameter(CompoundParameterID$KpPredictionMethod,CompoundID$Substrate, as.integer(Method))
     Simcyp::SetCompoundParameter(CompoundParameterID$UseOliveOilWaterSurrogateForNLP ,CompoundID$Substrate, FALSE)
-    #message(paste('Vss prediction method is set to Method', info$Prediction_method, sep= ' '))
+    message(paste('Vss prediction method is set to Method', info$Prediction_method, sep= ' '))
   }
   
   # Olive:oil water partition
@@ -88,12 +90,14 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time, oliveoil_water_
     #set the quaternary nitrogen flag
     Simcyp::SetCompoundParameter(CompoundParameterID$QuatNSwitch,CompoundID$Substrate, info$quat_N ) 
     # predicted fu from Simcyp
-    Pred_fu<-Simcyp::GetCompoundParameter("idFu2",CompoundID$Substrate)  
+    fu<-Simcyp::GetCompoundParameter("idFu2",CompoundID$Substrate)  
+    print(paste('pred fu',fu,sep=''))
     
   } else{
-    #message(paste("Setting User-input Fu =", info$fu_value, sep=""))
+    message(paste("Setting User-input Fu =", info$fu_value, sep=""))
     #user input fu  
     Simcyp::SetCompoundParameter("idFu1",CompoundID$Substrate, as.numeric(info$fu_value) )  
+    fu <- Simcyp::GetCompoundParameter("idFu1",CompoundID$Substrate)  
   }
   
   # Blood Plasms (BP) Settings.
@@ -103,7 +107,7 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time, oliveoil_water_
     if (info$BP_type=='Predicted'){
       #switch to pred BP
       Simcyp::SetCompoundParameter("BP",CompoundID$Substrate, 1L )  
-      #message("BP not specified by user. Predicted BP used instead.")
+      message("BP not specified by user. Predicted BP used instead.")
       Pred_bp<-Simcyp::GetCompoundParameter("BP",CompoundID$Substrate)
 
     } else {
@@ -127,7 +131,7 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time, oliveoil_water_
     
   } else if (info$Compound_type== "Neutral") {
     Simcyp::SetCompoundParameter(CompoundParameterID$CompoundType,CompoundID$Substrate, 4L )
-    #message("NEUTRAL. No pKa value.")
+    message("NEUTRAL. No pKa value.")
     
   } else if (info$Compound_type== "Monoprotic base"){
     Simcyp::SetCompoundParameter(CompoundParameterID$CompoundType,CompoundID$Substrate, 3L )
@@ -164,7 +168,15 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time, oliveoil_water_
   # -------------------------------
   if (!is.na(info$CLint_value)){
     Simcyp::SetCompoundParameter("idWOMC_HEP_Clint",CompoundID$Substrate, as.numeric(info$CLint_value))
-    #message("CLint value provided by the user.")
+    message("CLint value provided by the user.")
+  } 
+  else if(is.na(info$CLint_value) & fu_GFR == T){
+    ## Calculate fu*GFR
+    GFR = 9.06 #L/h
+    fu_GFR <- as.numeric(fu)*GFR
+
+    Simcyp::SetCompoundParameter("idCLRbase",CompoundID$Substrate, as.numeric(fu_GFR))
+    message("fu*GFR calculated and used as Renal Clearance.")
   }
   
   # Input the calculated fu_inc value
@@ -189,32 +201,34 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time, oliveoil_water_
   }
   
   unit_names<-c( "mg/m^2", "mg", "mg/kg")
-  #message(paste('Setting dose to', as.numeric(info$Dose),unit_names[Units+1], sep=' '))
-  #hi <- GetCompoundParameter(CompoundParameterID$WOMC_HepatocyteCLintCV,CompoundID$Substrate)
-  #print(hi)
+  message(paste('Setting dose to', as.numeric(info$Dose),unit_names[Units+1], sep=' '))
   
-  # if (subjects == 'Population Representative'){
-  #   
-  #   SetParameter(SimulationParameterID$VirtualPopulationRadio,CategoryID$SimulationData, CompoundID$Substrate,0L)
-  #   SetParameter(SimulationParameterID$PopRepRadio,CategoryID$SimulationData, CompoundID$Substrate,1L)
-  #   message('Simulating Population Representative')
-  #     
-  # } else{
+  if (subjects == 'pop rep'){
+
+    #SetParameter(SimulationParameterID$VirtualPopulationRadio,CategoryID$SimulationData, CompoundID$Substrate,0L)
+    #SetParameter(SimulationParameterID$PopRepRadio,CategoryID$SimulationData, CompoundID$Substrate,1L)
+    SetParameter(SimulationParameterID$UseAverageMan,CategoryID$SimulationData, CompoundID$Substrate,1L)
+    message('Simulating Population Representative')
+
+  } else{
   
   if (is.numeric(subjects)){
     SetParameter(SimulationParameterID$VirtualPopulationRadio,CategoryID$SimulationData, CompoundID$Substrate,1L)
     SetParameter(SimulationParameterID$PopRepRadio,CategoryID$SimulationData, CompoundID$Substrate,0L)
     # 2.1 Set the Number of Trials
-    Simcyp::SetParameter(SimulationParameterID$Group,CategoryID$SimulationData, CompoundID$Substrate, as.integer(trials)) # Trial num
+    Simcyp::SetParameter(SimulationParameterID$Group,CategoryID$SimulationData, CompoundID$Substrate, as.numeric(trials)) # Trial num
     #print(paste('trials:',GetParameter(SimulationParameterID$Group,CategoryID$SimulationData, CompoundID$Substrate), sep = ' '))
     
     # 2.2 Set the Number of Subjects for each trial
+    print(subjects)
     Simcyp::SetParameter(Simcyp::SimulationParameterID$Mempgroup,CategoryID$SimulationData, CompoundID$Substrate,as.integer(subjects))
     message(paste('Simulating',GetParameter(Simcyp::SimulationParameterID$Mempgroup,CategoryID$SimulationData, CompoundID$Substrate), 'subjects.', sep = ' '))
     
     GetParameter(SimulationParameterID$Pop,CategoryID$SimulationData, CompoundID$Substrate)   # Population Size. This has not changed yet, one needs to change this also to => trial*subject 
     SetParameter(SimulationParameterID$Pop,CategoryID$SimulationData, CompoundID$Substrate,as.integer(trials*subjects))
     #print(paste('product:',as.integer(trials*subjects), sep = ' '))
+  }
+    
   }
   
   #set the simulation duration
@@ -224,7 +238,7 @@ Set_parameters <- function(Compound, trials = 1, subjects, Time, oliveoil_water_
   
 }
 
-SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects, Time, seed, oliveoil_water_for_NLP,
+SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects, Time, seed, oliveoil_water_for_NLP, fu_GFR,
                                
                                #dermal parameters
                                dermal_area, formulation_thickness, formulation_density,
@@ -251,7 +265,7 @@ SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects,
     capture.output(Simcyp::SetWorkspace(workspace), file='NUL')
     
     # Set the parameters of the compound in the loaded workspace
-    Set_parameters(Data, trials, subjects, Time, oliveoil_water_for_NLP)
+    Set_parameters(Data, trials, subjects, Time, oliveoil_water_for_NLP, fu_GFR)
     
     # set additional parameters if workspace is dermal
     if (str_detect(workspace,'Dermal')){
@@ -265,7 +279,7 @@ SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects,
         user_dermal_area <- GetCompoundParameter(CompoundParameterID$DermalArea,CompoundID$Substrate)
       }
       
-      #message(paste('Dermal area of application is',user_dermal_area,'cm^2',sep=' '))
+      message(paste('Dermal area of application is',user_dermal_area,'cm^2',sep=' '))
       
       if (!is.na(formulation_thickness)){
         #allow user to specify dermal formulation thickness in cm
@@ -275,7 +289,7 @@ SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects,
         user_formulation_thickness <- GetCompoundParameter(CompoundParameterID$DermalApplicationLayerThickness,CompoundID$Substrate)
       }
       
-      #message(paste('Formulation thickness is',user_formulation_thickness,'cm',sep=' '))
+      message(paste('Formulation thickness is',user_formulation_thickness,'cm',sep=' '))
       
       if (!is.na(formulation_density)){
         #allow user to specify dermal formulation density in g/mL
@@ -285,7 +299,7 @@ SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects,
         user_formulation_density <- GetCompoundParameter(CompoundParameterID$DermalApplicationLayerDensity,CompoundID$Substrate)
       }
       
-      #message(paste('Formulation density is',user_formulation_density,'g/L',sep=' '))
+      message(paste('Formulation density is',user_formulation_density,'g/L',sep=' '))
  
     }
     
@@ -305,7 +319,7 @@ SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects,
         interval_of_doses <- GetCompoundParameter(CompoundParameterID$Dose_Interval,CompoundID$Substrate)
       }
       
-      #message(paste('The dose interval is',interval_of_doses,'hours',sep=' '))
+      message(paste('The dose interval is',interval_of_doses,'hours',sep=' '))
       
       if (!is.na(Num_doses)){
         #allow user to specify the number of doses, otherwise use the default
@@ -334,7 +348,7 @@ SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects,
     } else{
       Minimum_Age <-GetParameter(SimulationParameterID$Age_Min0,CategoryID$SimulationData, CompoundID$Substrate)
     }
-    
+
     if (!is.na(MaxAge)){
       #allow user to specify the maximum age of the population
       Simcyp::SetParameter(SimulationParameterID$Age_Max0,CategoryID$SimulationData, CompoundID$Substrate, MaxAge)
@@ -343,7 +357,7 @@ SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects,
       Maximum_Age <-GetParameter(SimulationParameterID$Age_Max0,CategoryID$SimulationData, CompoundID$Substrate)
     }
     message(paste('Population Age Range is from',Minimum_Age,'to', Maximum_Age,sep=' '))
-    
+
     if (!is.na(Prop_females)){
       #allow user to specify theproportion of females in the population
       Simcyp::SetParameter(SimulationParameterID$ProbF0,CategoryID$SimulationData, CompoundID$Substrate, Prop_females)
@@ -355,20 +369,21 @@ SimulateWorkspace <- function (data, workspace, path_user, trials = 1, subjects,
     #message(paste('Proportion of females in population is',proportion_of_females,sep=' '))
     
     # File path to save the database results to
-    DBfilepath <- file.path(path_user, paste(Data$CS_code,".db",sep="")) 
+    DBfilepath <- file.path(path_user, paste(Data$Code,".db",sep="")) 
+    print(DBfilepath)
     
     # Run simulation, suppress all console output 
     capture.output(Simcyp::Simulate(database=DBfilepath), file='NUL')  
-    message( paste("Simulation Complete for ", Data$CS_code) )
+    message( paste("Simulation Complete for ", Data$Code) )
     
-    Output <- rbind(Output, TissueProfiles(Data$CS_code))
+    Output <- rbind(Output, TissueProfiles(Data$Code))
   }
 
   return(Output)
   
 }
 
-SimcypSimulation <- function (organised_data, trials = 1, subjects, Time, seed = T,
+SimcypSimulation <- function (organised_data, trials = 1, subjects, Time, seed = T, fu_GFR,
                               
                               #dermal parameters
                               dermal_area = NA , formulation_thickness = NA, formulation_density = NA,
@@ -383,8 +398,8 @@ SimcypSimulation <- function (organised_data, trials = 1, subjects, Time, seed =
                               oliveoil_water_for_NLP = T){
   
   #Intialise the system files path
-  Simcyp::Initialise("C:\\Program Files\\Simcyp Simulator V21\\Screens\\SystemFiles",
-                     21,species = SpeciesID$Human, verbose = FALSE)
+  Simcyp::Initialise("C:\\Program Files\\Simcyp Simulator V23\\Screens\\SystemFiles",
+                   23,species = SpeciesID$Human, verbose = FALSE)
   
   #Set script to source file location
   path_user <-Simcyp::ScriptLocation()
@@ -393,6 +408,8 @@ SimcypSimulation <- function (organised_data, trials = 1, subjects, Time, seed =
   #create a list of workspaces in the directory
   SimcypWksz<-unlist(list.files(path_user, pattern="\\.wksz$",full.names=FALSE , recursive=F ))
   
+  
+  # Set the workspace depending on administration route
   if (organised_data$Route[1] == 'Oral'){
     
     message('Using an Oral Workspace')
@@ -423,15 +440,21 @@ SimcypSimulation <- function (organised_data, trials = 1, subjects, Time, seed =
   }
   
   # Separating the data based on Clint value. 
-  Mechkim <- organised_data %>% filter(is.na(CLint_value) )  
-  NonMechkim <- organised_data %>% filter(!is.na(CLint_value) ) 
+  if (fu_GFR == T){
+    Mechkim <- data.frame()
+    NonMechkim <- organised_data
+  } else{
+    Mechkim <- organised_data %>% filter(is.na(CLint_value) )  
+    NonMechkim <- organised_data %>% filter(!is.na(CLint_value) ) 
+  }
+ 
   
   if (nrow(Mechkim != 0)){
     
     #print(paste('Simcyp Workspace:',SimcypWksz[1],sep=''))
-    #message('Activating MechKiM')
+    message('Activating MechKiM')
     simulated_data_MechKim <- SimulateWorkspace(Mechkim, SimcypWksz[1], 
-                                                path_user, trials, subjects, Time, seed, 
+                                                path_user, trials, subjects, Time, seed, fu_GFR = F,
                                                 oliveoil_water_for_NLP,
                                                 dermal_area, formulation_thickness, formulation_density,
                                                 MinAge, MaxAge, Prop_females,
@@ -443,9 +466,10 @@ SimcypSimulation <- function (organised_data, trials = 1, subjects, Time, seed =
   
   if (nrow(NonMechkim != 0)){
    # print(paste('Simcyp Workspace:',SimcypWksz[2],sep=''))
-    #message('Activating Non-MechKiM')
+    message('Activating Non-MechKiM')
+    print(SimcypWksz[2])
     simulated_data_NonMechKim <- SimulateWorkspace(NonMechkim, SimcypWksz[2], 
-                                                   path_user, trials, subjects, Time, seed, 
+                                                   path_user, trials, subjects, Time, seed, fu_GFR,
                                                    oliveoil_water_for_NLP,
                                                    dermal_area, formulation_thickness, formulation_density,
                                                    MinAge, MaxAge, Prop_females,
@@ -464,25 +488,48 @@ SimcypSimulation <- function (organised_data, trials = 1, subjects, Time, seed =
   
 }
  
-AdditionalOutputs <- function (organised_data){
+AdditionalOutputs <- function (organised_data,directory){
   
   require(RSQLite)
   
-  codes<-organised_data$CS_code
-  simulated_data <-list()
-  for (i in 1:length(codes)){
-    info_to_extract <- RSQLite::dbConnect(SQLite(),paste(codes[i],'.db',sep=''))   #DBfilepath
+  if (!is.null(organised_data) | is.null(directory)){
+    codes<-organised_data$Code
+    simulated_data <-list()
+    for (i in 1:length(codes)){
+      info_to_extract <- RSQLite::dbConnect(SQLite(),paste(codes[i],'.db',sep=''))   #DBfilepath
+      
+      #extract main data
+      simulated_data[[i]]<- extract_info(info_to_extract)
+      
+      #Detach database connection
+      RSQLite::dbDisconnect(info_to_extract)  
+    }
     
-    #extract main data
-    simulated_data[[i]]<- extract_info(info_to_extract)
+    names(simulated_data)<- codes
     
-    #Detach database connection
-    RSQLite::dbDisconnect(info_to_extract)  
+    return(simulated_data)
+  } else{
+    
+    codes<- unlist(list.files(directory, pattern="\\.db$",full.names=TRUE , recursive=F ))
+    simulated_data <-list()
+    for (i in 1:length(codes)){
+      info_to_extract <- RSQLite::dbConnect(SQLite(),codes[i])   #DBfilepath
+      
+      #extract main data
+      simulated_data[[i]]<- extract_info(info_to_extract)
+      
+      #Detach database connection
+      RSQLite::dbDisconnect(info_to_extract)  
+    }
+    
+    names(simulated_data)<- codes
+    
+    return(simulated_data)
+    
+    
   }
   
-  names(simulated_data)<- codes
   
-  return(simulated_data)
   
 }
 
