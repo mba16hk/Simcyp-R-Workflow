@@ -293,6 +293,6 @@ OrganiseInputData <- function (httk_exp_data, info,
     CMPD_IMPORT <- CMPD_IMPORT[-missing_logp,]
   }
   
-  return(unique(CMPD_IMPORT[1:5,]))
+  return(unique(CMPD_IMPORT))
   
 }
