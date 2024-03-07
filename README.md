@@ -83,36 +83,40 @@ output_profiles<-SimcypSimulation(organised_data, trials = 1, subjects = 5, Time
 ```
 
 ```bash
+## Process Simcyp outputs
+
 #extract additional outputs (which will be used for plotting)
 simcyp_outputs <- AdditionalOutputs(organised_data)
-```
 
-```bash
 #summarise outputs into human-readable table containing simulated compounds
 summary_simcyp <-SummaryOutputs(simcyp_outputs)
 ```
 
 ```bash
+###Generating plots
+
 #plot concentration-time profiles. Units can be either 'uM' or 'ng/mL'.
 plot_profile('CompoundID', output_profiles, curated_data = httk_data,
-              units = 'uM', logy=F)
-```
+              units = 'uM', logy=F, tissue_type = 'PLASMA', CI = F)
+plot_profile('CompoundID', output_profiles, curated_data = httk_data,
+              units = 'ng/ml', logy=T, tissue_type = 'BRAIN', CI = T)
+plot_profile('CompoundID', output_profiles, curated_data = httk_data,
+              units = 'ng/ml', logy=F, tissue_type = 'ALL', CI = T)
 
-```bash
 #plot a scatter plot to see the trend between two simulated parameters
 plot_parameters(simcyp_outputs, 'CompoundID', 
              plot_type = 'Relationship', 'BW', 'Tmax',
              'blue')
-```
 
-```bash
 #plot a distribution plot to see variation of a parameter across a populationf for a given compound            
 plot_parameters(simcyp_outputs, 'CompoundID', 
                 plot_type = 'Distribution', 'Age', 'Tmax',
                 'blue')
-```               
 
-```bash
-#create a chart to compare a given parameter across simulated compounds
-compare_simulated_compound(summary_simcyp,'Vss','compound_code','salmon')
-```
+#create a plot to compare the simulated compounds in high throughput
+compare_simulated_compound(summary_simcyp, parameter = 'Vss', bar_order = 'ascending' , bar_col = 'salmon')
+
+#Create a plot to compare the collected physicochemical data against the simcyp predictions
+PhyschemvsPredictedParamsPlot(Physicochemical_data,summary_simcyp,physchem_param = 'LogP',predicted_param = 'Ka',plot_colour = 'blue')
+```              
+
