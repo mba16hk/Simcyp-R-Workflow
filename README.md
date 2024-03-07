@@ -1,5 +1,5 @@
 # SimRFlow
-A high throughput workflow comprising data collection and simulation of compounds using Certara's Simcyp Simulator.
+A high throughput workflow comprising data collection and simulation of compounds using Certara's Simcyp Simulator. To use the full workflow, please contact Certara for a Simcyp License. The data collection modules of SimRFlow require no license.
 
 # The following is an example use of SimRFlow functions
 
