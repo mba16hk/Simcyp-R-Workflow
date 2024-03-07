@@ -11,14 +11,14 @@ setwd(dirname(rstudioapi::getSourceEditorContext()$path))
 ```bash
 #import the scripts 
 source('input_query.R')
-source('chembl_search.R')
-source('susdat_search.R')
-source('ACD_Labs.R')
+source('SimRFlow_DataCollection_Module.R')
 source('httk_search.R')
 source('experimental_data_search.R')
 source('organise_simulation_data.R')
 source('R Workflow.R')
 source('PredictParams.R')
+source('Additional_data.R')
+source('plotting_functions.R')
 ```
 ```bash
 #set the file directory of the compound file
@@ -31,23 +31,16 @@ data <- ProcessInputs(file_dir)
 ```
 
 ```bash
-#query the chembl database
-chembl_data <- CHEMBLSearch(data)
+#query the chembl, Pubchem and EPI Suite (Norman) database
+Physicochemical_data <- SimRFlow_DataCollection(data_table, PubChem = T, Norman = T)
 ```
 
 ```bash
-#determine the compounds not found in chembl
-nf_in_chembl <- CompoundsNotFound(data, chembl_data)
-```
+#determine the compounds not found in your database, or which have missing data
+Not_found <- MissingInformation(data,Physicochemical_data, missing_info = T)
 
-```bash
-#query the Norman suspect database for the compounds not found in Chembl
-sus_data <- SusdatSearch(data, nf_in_chembl, chembl_data)
-```
-
-```bash
-#determine the compounds not found in the Norman suspect list
-NOT_FOUND <- NotFoundInsusdat(nf_in_chembl, sus_data)
+#determine which compounds can have parameters which are out of the applicablility domain of Simcyp
+out_of_range <- OutOfRange_Parameter(Physicochemical_data)
 ```
 
 ```bash
@@ -64,13 +57,9 @@ physchem_data <- ACD_outputs(data,ACD_data_directory,sus_data)
 ```
 
 ```bash
-### For users who do not have additional data
-#physchem_data <- sus_data
-```
-
-```bash
 #search httk library for experimental data using CAS and DTXSIDs
-httk_data <- httkSearch(physchem_data, CAS_DTXSID, data)
+httk_data <- httkSearch(Physicochemical_data, CAS_DTXSID, data,
+                        fu_operation = 'arithmetic mean',CLint_operation = 'median')
 ```
 
 ```bash
