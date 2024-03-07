@@ -2,7 +2,8 @@ library(ggplot2)
 library(scales)
 
 # Function from plotting conc-time profiles for each compound
-plot_profile <- function(casestudy_ID, Output, tissue_type = 'PLASMA' ,units = 'ng/mL', curated_data, logy=F, compound_name = NA){
+plot_profile <- function(casestudy_ID, Output, tissue_type = 'PLASMA' ,units = 'ng/mL',
+                         curated_data, logy=F, compound_name = NA, CI = F){
   
   require(ggplot2)
   require(scales)
@@ -11,93 +12,254 @@ plot_profile <- function(casestudy_ID, Output, tissue_type = 'PLASMA' ,units = '
   indicies<-which(Output$Group == casestudy_ID)
   df <- Output[indicies,2:ncol(Output)]
   
-  #determine the correct tissue type
-  tissue_type <- toupper(tissue_type)
-  tissue_index <- str_detect(colnames(df),tissue_type)
-  time_index <- str_detect(colnames(df),'time|Time|times|Times')
-  set1 <- which(tissue_index==T)
-  set2 <- which(time_index == T)
-  df <- df[,c(set2,set1)]
-  
-  #adjust column names
-  colnames(df) <- sub("_[^_]+$", "", colnames(df))
-  
-  #if more than 30 individuals are simulated, only select 30 at random
-  if (ncol(df)>31){
-    randomly_selected_cols <- sample(2:ncol(df), 2, replace=F)
-    df<-df[,c(1,randomly_selected_cols)]
-  }
-  
-  #convert dataframe into long form
-  df<- long_form(df)
-  colnames(df)<-c('Sub','Times','Conc')
-  
-  #Create Title for plot
-  if (!is.na(compound_name)){
-    header<-paste(compound_name, tissue_type,sep=' ')
-  }else{
-    header<-paste(casestudy_ID, tissue_type,'Concentration-Time Profiles',sep=' ')
-  }
-  
-  if (units == 'ng/mL'){
+  if (tissue_type == 'ALL'){
     
-    df <- df
-    #mean_profile$Concentration <- mean_profile$Concentration
-    ytitle <- paste('Concentration',paste0('(',units,')'), sep=' ')
+    all_tissues <- c("plasma",
+                     "brain",
+                     "liver",
+                     "kidney",
+                     "skin",
+                     "pancreas",
+                     "gut",
+                     "heart",
+                     "lung",
+                     "spleen",
+                     "muscle",
+                     "adipose")
     
-  } else if (units == 'uM'){
+    list_of_plots <- list()
     
-    #Extract MW from curated data
-    df_curated_data <- curated_data[which(curated_data$CODE == casestudy_ID),]
-    MW <- df_curated_data$MW
+    general_theme <- theme(
+      plot.background = element_rect(fill = "white", colour = NA),
+      panel.background = element_rect(fill = "white", colour = NA),
+      axis.line.x = element_line(color="black", size = 1),
+      axis.line.y = element_line(color="black", size = 1),
+      panel.grid.major = element_line(color = "grey"),
+      panel.grid.minor = element_line(color = "grey"),
+      axis.text = element_text(colour = "black",size=9),
+      axis.title = element_text(colour = "black",size=12,face="bold"),
+      legend.key=element_blank()
+    )
     
-    ## convert units of cmax from mg/L -> uM #check again
-    df$Conc <- (df$Conc/1000)/MW*1e6
-    ytitle <- paste('Concentration',paste0('(',units,')'), sep=' ')
+    for (i in 1:length(all_tissues)){
+      
+      tissue_type <- toupper(all_tissues[i])
+      tissue_index <- str_detect(colnames(df),tissue_type)
+      time_index <- str_detect(colnames(df),'time|Time|times|Times')
+      set1 <- which(tissue_index==T)
+      set2 <- which(time_index == T)
+      tmp_df <- df[,c(set2,set1)]
+      
+      #adjust column names
+      colnames(tmp_df) <- sub("_[^_]+$", "", colnames(tmp_df))
+      
+      
+      if (CI == F){
+        ## In this case, we will not be plotting confidence intervals
+        
+        #if more than 30 individuals are simulated, only select 30 at random
+        if (ncol(tmp_df)>31){
+          randomly_selected_cols <- sample(2:ncol(tmp_df), 2, replace=F)
+          tmp_df<-tmp_df[,c(1,randomly_selected_cols)]
+        }
+        
+        #convert dataframe into long form
+        tmp_df<- long_form(tmp_df)
+        colnames(tmp_df)<-c('Sub','Times','Conc')
+        
+      } else if (CI == T){
+        
+        ### we will be plotting confidence intervals
+        
+        vals <- tmp_df[,2:ncol(tmp_df)]
+        confidence_intervals <- apply(vals,1,function (x) {
+          c(lower = quantile(x, 0.05), upper = quantile(x, 0.95))}
+        )
+        confidence_intervals <- as.data.frame(t(confidence_intervals))
+        tmp_df <- cbind(tmp_df$Times,rowMeans(vals),confidence_intervals)
+        colnames(tmp_df)<-c('Times','Conc','5%','95%')
+        
+      }
+      
+      
+      if (units == 'ng/mL'){
+        
+        tmp_df <- tmp_df
+        #mean_profile$Concentration <- mean_profile$Concentration
+        ytitle <- paste('Concentration',paste0('(',units,')'), sep=' ')
+        
+      } else if (units == 'uM'){
+        
+        #Extract MW from curated data
+        df_curated_data <- curated_data[which(curated_data$CODE == casestudy_ID),]
+        MW <- df_curated_data$MW
+        
+        ## convert units of cmax from mg/L -> uM #check again
+        tmp_df$Conc <- (tmp_df$Conc/1000)/as.numeric(MW)*1e6
+        
+        if (CI == T){
+          tmp_df$`5%`<- (tmp_df$`5%`/1000)/as.numeric(MW)*1e6
+          tmp_df$`95%`<- (tmp_df$`95%`/1000)/as.numeric(MW)*1e6
+        }
+        
+        ytitle <- paste('Concentration',paste0('(',units,')'), sep=' ')
+        
+      } else{
+        
+        message('Please select either ng/mL or uM. ng/mL used as default')
+        ytitle <- paste('Concentration (ng/mL)', sep=' ')
+      }
+      
+      
+      if (CI == F){
+        g1 <- ggplot(tmp_df, aes(x = Times, y = Conc, group = factor(Sub))) + 
+          geom_line(aes(color=factor(Sub)), size = 1.5, linetype = 1) +  
+          xlab(NULL) + ylab(NULL) + ggtitle(toupper(all_tissues[i])) + labs(color  = "Subjects", linetype = 1)
+      } else if (CI == T){
+        g1 <- ggplot(data = tmp_df) + 
+          geom_line(aes(x = Times, y = Conc), size = 1.5, linetype = 1, colour = 'green3') + 
+          geom_ribbon(aes(x = Times, ymin= `5%`, ymax= `95%`), alpha=0.2) +  
+          xlab(NULL) + ylab(NULL) + ggtitle(toupper(all_tissues[i])) 
+      }
+      
+      
+      if (logy == T){
+      
+        g1 <- g1 + general_theme +  scale_y_continuous(trans='log10')
+        
+        list_of_plots[[i]] <- g1
+        
+      } else {
+
+        #Plot the mean profile (y axis normal scale)
+        g1 <- g1 +  general_theme
+        
+        list_of_plots[[i]] <- g1
+      }
+      
+    }
     
-  } else{
+    require(ggpubr)
+    require(grid)
     
-    message('Please select either ng/mL or uM. ng/mL used as default')
-    ytitle <- paste('Concentration (ng/mL)', sep=' ')
-  }
-  
-  if (logy == T){
-    
-    #Plot the mean profile (y axis normal scale)
-    g1 <- ggplot(df, aes(x = Times, y = Conc, group = factor(Sub))) + geom_line(aes(color=factor(Sub)), size = 1.5, linetype = 1)
-    g1 <- g1 + geom_line() 
-    g1 <- g1 + xlab("Time (hours)") + ylab(ytitle)
-    g1 <- g1 + ggtitle(header) + 
-      labs(color  = "Subjects", linetype = 1)+ theme(
-        plot.background = element_rect(fill = "white", colour = NA),
-        panel.background = element_rect(fill = "white", colour = NA),
-        axis.line.x = element_line(color="black", size = 1),
-        axis.line.y = element_line(color="black", size = 1),
-        panel.grid.major = element_line(color = "grey"),
-        panel.grid.minor = element_line(color = "grey"),
-        axis.text = element_text(colour = "black",size=12),
-        axis.title = element_text(colour = "black",size=14,face="bold")
-      )
-    
-    g1 + scale_y_continuous(trans='log10')
+    all_tissues_fig <- ggarrange(plotlist = list_of_plots, ncol = 6, nrow = 2,common.legend = T, legend = 'top')
+    annotate_figure(all_tissues_fig, left = textGrob(ytitle, rot = 90, vjust = 1, gp = gpar(cex = 1.3)),
+                    bottom = textGrob("Time (hrs)", gp = gpar(cex = 1.3)))
     
   } else {
     
-    #Plot the mean profile (y axis normal scale)
-    g1 <- ggplot(df, aes(x = Times, y = Conc, group = factor(Sub))) + geom_line(aes(color=factor(Sub)), size = 1, linetype = 1) 
-    g1 <- g1 + xlab("Time (hours)") + ylab(ytitle)
-    g1 + ggtitle(header) + 
-      #guides(colour=guide_legend(nrow=1))+
-      labs(color  = "Subjects", linetype = 1)+ theme(
-        plot.background = element_rect(fill = "white", colour = NA),
-        panel.background = element_rect(fill = "white", colour = NA),
-        axis.line.x = element_line(color="black", size = 1),
-        axis.line.y = element_line(color="black", size = 1),
-        panel.grid.major = element_line(color = "grey"),
-        panel.grid.minor = element_line(color = "grey"),
-        axis.text = element_text(colour = "black",size=12),
-        axis.title = element_text(colour = "black",size=14,face="bold"),
+    
+    general_theme <- theme(
+          plot.background = element_rect(fill = "white", colour = NA),
+          panel.background = element_rect(fill = "white", colour = NA),
+          axis.line.x = element_line(color="black", size = 1),
+          axis.line.y = element_line(color="black", size = 1),
+          panel.grid.major = element_line(color = "grey"),
+          panel.grid.minor = element_line(color = "grey"),
+          axis.text = element_text(colour = "black",size=12),
+          axis.title = element_text(colour = "black",size=14,face="bold"),
+          legend.key=element_blank()
+        )
+    
+    #determine the correct tissue type
+    tissue_type <- toupper(tissue_type)
+    tissue_index <- str_detect(colnames(df),tissue_type)
+    time_index <- str_detect(colnames(df),'time|Time|times|Times')
+    set1 <- which(tissue_index==T)
+    set2 <- which(time_index == T)
+    df <- df[,c(set2,set1)]
+    
+    #adjust column names
+    colnames(df) <- sub("_[^_]+$", "", colnames(df))
+    
+    if (CI == F){
+      ## In this case, we will not be plotting confidence intervals
+      
+      #if more than 30 individuals are simulated, only select 30 at random
+      if (ncol(df)>31){
+        randomly_selected_cols <- sample(2:ncol(df), 2, replace=F)
+        df<-df[,c(1,randomly_selected_cols)]
+      }
+      
+      #convert dataframe into long form
+      df<- long_form(df)
+      colnames(df)<-c('Sub','Times','Conc')
+      
+    } else if (CI == T){
+      
+      ### we will be plotting confidence intervals
+      
+      vals <- df[,2:ncol(df)]
+      confidence_intervals <- apply(vals,1,function (x) {
+        c(lower = quantile(x, 0.05), upper = quantile(x, 0.95))}
       )
+      confidence_intervals <- as.data.frame(t(confidence_intervals))
+      df <- cbind(df$Times,rowMeans(vals),confidence_intervals)
+      colnames(df)<-c('Times','Conc','5%','95%')
+      
+    }
+    
+    #Create Title for plot
+    if (!is.na(compound_name)){
+      header<-paste(compound_name, tissue_type,sep=' ')
+    }else{
+      header<-paste(casestudy_ID, tissue_type,'Concentration-Time Profiles',sep=' ')
+    }
+    
+    if (units == 'ng/mL'){
+      
+      df <- df
+      #mean_profile$Concentration <- mean_profile$Concentration
+      ytitle <- paste('Concentration',paste0('(',units,')'), sep=' ')
+      
+    } else if (units == 'uM'){
+      
+      #Extract MW from curated data
+      df_curated_data <- curated_data[which(curated_data$CODE == casestudy_ID),]
+      MW <- df_curated_data$MW
+      
+      ## convert units of cmax from mg/L -> uM #check again
+      df$Conc <- (df$Conc/1000)/as.numeric(MW)*1e6
+      
+      if (CI == T){
+        df$`5%`<- (df$`5%`/1000)/as.numeric(MW)*1e6
+        df$`95%`<- (df$`95%`/1000)/as.numeric(MW)*1e6
+      }
+      ytitle <- paste('Concentration',paste0('(',units,')'), sep=' ')
+      
+    } else{
+      
+      message('Please select either ng/mL or uM. ng/mL used as default')
+      ytitle <- paste('Concentration (ng/mL)', sep=' ')
+    }
+    
+    
+    if (CI == F){
+      g1 <- ggplot(df, aes(x = Times, y = Conc, group = factor(Sub))) + 
+        geom_line(aes(color=factor(Sub)), size = 1.5, linetype = 1) +  
+        xlab("Time (hours)") + ylab(ytitle) + ggtitle(header) + labs(color  = "Subjects", linetype = 1)
+    } else if (CI == T){
+      g1 <- ggplot(data = df) + 
+        geom_line(aes(x = Times, y = Conc), size = 1.5, linetype = 1, colour = 'green3') + 
+        geom_ribbon(aes(x = Times, ymin= `5%`, ymax= `95%`), alpha=0.2) +  
+        xlab("Time (hours)") + ylab(ytitle) + ggtitle(header) 
+    }
+    
+    
+    if (logy == T){
+      
+      g1 <- g1 + general_theme +  scale_y_continuous(trans='log10')
+      
+      g1
+      
+    } else {
+      
+      #Plot the mean profile (y axis normal scale)
+      g1 <- g1 +  general_theme
+      
+      g1
+    }
+    
   }
   
 }
@@ -220,13 +382,14 @@ compare_simulated_compound <- function(summary_simcyp, parameter, bar_order, bar
       panel.grid.major = element_line(color = "grey"),
       panel.grid.minor = element_line(color = "grey"),
       axis.text = element_text(colour = "black",size=12),
+      axis.text.x = element_text(angle = 90),
       axis.title = element_text(colour = "black",size=14,face="bold"))
 }
 
 PhyschemvsPredictedParamsPlot <- function(physchem_data,summary_simcyp,physchem_param,predicted_param,plot_colour){
   
   x_variable_idx <- which(colnames(physchem_data)==physchem_param)
-  order_by_code_x <- physchem_data[order(physchem_data$CS_code),]
+  order_by_code_x <- physchem_data[order(physchem_data$Code),]
   x_variable <- order_by_code_x[,x_variable_idx]
   
   y_variable_idx <- which(colnames(summary_simcyp)== predicted_param)
@@ -234,7 +397,7 @@ PhyschemvsPredictedParamsPlot <- function(physchem_data,summary_simcyp,physchem_
   y_variable <- as.numeric(order_by_code_y[,y_variable_idx])
   
   #collate all data
-  df <- as.data.frame(cbind(order_by_code_x$CS_code,x_variable,y_variable))
+  df <- as.data.frame(cbind(order_by_code_x$Code,x_variable,y_variable))
   
   if(physchem_param=='Compound_type'|physchem_param=='HBD'){
     
@@ -263,7 +426,7 @@ PhyschemvsPredictedParamsPlot <- function(physchem_data,summary_simcyp,physchem_
     
     #relationships are scatter diagrams where x and y variables are needed
     g1 <- ggplot(df, aes(x = as.numeric(x_variable), y = as.numeric(y_variable)))
-    g1 <- g1 + geom_point(colour = plot_colour, size = 3) #+ geom_smooth(method = "lm", se = FALSE, colour = chosen_col)  
+    g1 <- g1 + geom_point(colour = plot_colour, size = 3) + geom_smooth(method = "lm", se = FALSE, colour = plot_colour)  
     g1 <- g1 + xlab(physchem_param) + ylab(paste(predicted_param,determine_units(predicted_param),sep = ' ')) +
       scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
       scale_y_continuous(breaks = scales::pretty_breaks(n = 10))

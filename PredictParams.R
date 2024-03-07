@@ -11,8 +11,8 @@ PredictParameters <- function(Compound_dataframe){
   Compound_dataframe$CLint_value <- NA
   
   #Intialise the system files path
-  Simcyp::Initialise("C:\\Program Files\\Simcyp Simulator V21\\Screens\\SystemFiles",
-                     21,species = SpeciesID$Human, verbose = FALSE)
+  Simcyp::Initialise("C:\\Program Files\\Simcyp Simulator V23\\Screens\\SystemFiles",
+                     23,species = SpeciesID$Human, verbose = FALSE)
   
   #Set script to source file location
   path_user <-Simcyp::ScriptLocation()
@@ -33,7 +33,7 @@ PredictParameters <- function(Compound_dataframe){
     Set_parameters(Compound, trials = 1, subjects=1, Time=3, oliveoil_water_for_NLP = T)
     
     # Create the Database file name, with DB Extension
-    DBfilename <- paste( Compound$CS_code,".db",sep="")
+    DBfilename <- paste( Compound$Code,".db",sep="")
     #print('DB file created')
     
     # File path to save the database results to
@@ -56,7 +56,7 @@ PredictParameters <- function(Compound_dataframe){
   #Finished with the engine
   Simcyp::Uninitialise()
   
-  simcyp_outputs <- AdditionalOutputs(Compound_dataframe)
+  simcyp_outputs <- AdditionalOutputs(Compound_dataframe, directory = NULL)
   summary_simcyp <-SummaryOutputs(simcyp_outputs)
   
   Predicted_params <- StaticPredictedParameters(summary_simcyp)

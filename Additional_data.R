@@ -2,24 +2,33 @@
 #users can upload their own data here which can override the already collected physchem data
 
 #function that returns list of compounds with missing info 
-MissingInformation <- function(info, not_found_chembl,episuite_data, missing_info = T){
+MissingInformation <- function(info, Physicochemical_data, missing_info = T){
   
   if (missing_info == T){
     
-    missing_PSA <- which(is.na(episuite_data$PSA))
-    missing_HBD <- which(is.na(episuite_data$HBD))
-    both_missing <- unique(c(missing_HBD,missing_PSA))
+    missing_PSA <- which(is.na(Physicochemical_data$PSA))
+    missing_HBD <- which(is.na(Physicochemical_data$HBD))
+    missing_MW <- which(is.na(Physicochemical_data$MW))
     
-    not_found_compounds<-NotFoundInsusdat(not_found_chembl, episuite_data)
-    not_found_compounds$Status <- 'Missing Compound'
+    Physicochemical_data$CXLogP <- ifelse(is.na(Physicochemical_data$CXLogP),Physicochemical_data$ALogP,Physicochemical_data$CXLogP)
+    
+    missing_LogP <- which(is.na(Physicochemical_data$CXLogP))
+    
+    both_missing <- unique(c(missing_HBD,missing_PSA,missing_MW,missing_LogP))
+    
+    not_found_compounds<-NotFoundComps(info, Physicochemical_data)
+    if (nrow(not_found_compounds)>0){
+      not_found_compounds$Status <- 'Missing Compound'
+    }
+    
     #get inchi of missing compounds
     
-    missing_inchi<-episuite_data$InChIKey[both_missing]
+    missing_inchi<-Physicochemical_data$INCHIKEY[both_missing]
     #missing_codes <- episuite_data$Code[both_missing]
     
     compounds_with_missing_info <- filter(info,info$INCHIKEY %in% missing_inchi)
     compounds_with_missing_info <- keep_df_cols(compounds_with_missing_info,
-                                                c('CODE', 'SMILES'))
+                                                c('CODE','COMPOUND' ,'INCHIKEY'))
     compounds_with_missing_info$Status <- 'Missing Infomation'
     missing_and_nf_compounds<-rbind(compounds_with_missing_info, not_found_compounds)
     missing_and_nf_compounds <- missing_and_nf_compounds %>% relocate(Status, .before = CODE)
@@ -28,7 +37,7 @@ MissingInformation <- function(info, not_found_chembl,episuite_data, missing_inf
     
   } else {
     
-    missing_compounds <- NotFoundInsusdat(not_found_chembl, episuite_data)
+    missing_compounds <- NotFoundComps(info, Physicochemical_data)
     missing_compounds$Status <- 'Missing Compound'
     missing_compounds <- missing_compounds %>% relocate(Status, .before = CODE)
     
@@ -210,5 +219,17 @@ AdditionalData <- function (info, additional_data_directory, sus_data,
   y$data_source <- ifelse(is.na(y$data_source),"User's Additional Data",y$data_source)
   
   return(y)
+  
+}
+
+
+NotFoundComps <- function (input_table, Physicochemical_data){
+  
+  require(dplyr)
+  
+  #Update NOT_FOUND df
+  NOT_FOUND<-filter(input_table,input_table$INCHIKEY %!in% Physicochemical_data$INCHIKEY )
+  NOT_FOUND<- keep_df_cols(NOT_FOUND,c('CODE','COMPOUND','INCHIKEY'))
+  return(NOT_FOUND)
   
 }

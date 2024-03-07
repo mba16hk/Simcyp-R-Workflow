@@ -20,13 +20,18 @@ ExpDataSearch <- function (httk_data, experimental_data_directory,
   }
   
   #inchikeys and case-study IDs
-  inchi_CSID <- keep_df_cols(httk_data,c('InChIKey','CODE'))
-  exp_data <- merge (exp_data, inchi_CSID,
-                     by = 'CODE' , all.x = T)
+  if(is.null(httk_data)){
+    relevant_exp_data <- exp_data
+  } else{
+    inchi_CSID <- keep_df_cols(httk_data,c('InChIKey','CODE'))
+    exp_data <- merge (exp_data, inchi_CSID,
+                       by = 'CODE' , all.x = T)
+    
+    # Extract CLint, fu, BP data with their inchi Keys
+    relevant_exp_data <- keep_df_cols(exp_data, c('InChIKey','CLINT',
+                                                  'BP','FU','logP'))
+  }
   
-  # Extract CLint, fu, BP data with their inchi Keys
-  relevant_exp_data <- keep_df_cols(exp_data, c('InChIKey','CLINT',
-                                                 'BP','FU'))
   
   #ensure only numbers are kept
   relevant_exp_data$CLINT <- suppressWarnings(as.numeric(relevant_exp_data$CLINT))
@@ -46,7 +51,12 @@ ExpDataSearch <- function (httk_data, experimental_data_directory,
   relevant_exp_data$FU[indicies_below_threshold] <- NA
   
   #merge experimental data with httk data
-  httk_exp_data<-merge(httk_data, relevant_exp_data, by ="InChIKey", all.x = T)
+  if(is.null(httk_data)){
+    httk_exp_data<-relevant_exp_data
+  }else{
+    httk_exp_data<-merge(httk_data, relevant_exp_data, by ="InChIKey", all.x = T)
+  }
+  
   
   #------------------------------- FU DATA ---------------------------
   #merge two columns together for the source and value of BP
@@ -58,43 +68,63 @@ ExpDataSearch <- function (httk_data, experimental_data_directory,
   empty_vector[indicies]<-'Experimental Data'
   httk_exp_data$BP.exp_source<-empty_vector
   
-  #if there is no BP experimental value, use the httk value
-  httk_exp_data$BP_fin <- ifelse(is.na(httk_exp_data$BP),
-                                 httk_exp_data$BP_value,
-                                 httk_exp_data$BP)
+  if('BP_value' %in% colnames(httk_data)|'BP_source' %in% colnames(httk_data)){
+    #if there is no BP experimental value, use the httk value
+    httk_exp_data$BP_fin <- ifelse(is.na(httk_exp_data$BP),
+                                   httk_exp_data$BP_value,
+                                   httk_exp_data$BP)
+    
+    #if there is identify the source of non-experimental BP data
+    httk_exp_data$BP.exp_source <- ifelse(is.na(httk_exp_data$BP.exp_source) & !is.na(httk_exp_data$BP_fin),
+                                          httk_exp_data$BP_source,
+                                          httk_exp_data$BP.exp_source)
+  } else{
+    httk_exp_data$BP_fin <- httk_exp_data$BP
+    #httk_exp_data$BP_fin <- httk_exp_d
+  }
   
-  #if there is identify the source of non-experimental BP data
-  httk_exp_data$BP.exp_source <- ifelse(is.na(httk_exp_data$BP.exp_source) & !is.na(httk_exp_data$BP_fin),
-                                        httk_exp_data$BP_source,
-                                        httk_exp_data$BP.exp_source)
+  
   
   #------------------------------- FU DATA ---------------------------
   #merge two columns together for the source and value of FU
   #-------------------------------------------------------------------
   
-  #if experimental data is missing, use the httk data
-  httk_exp_data$FU_value <-ifelse(is.na(httk_exp_data$FU),
-                                  httk_exp_data$fu_value,
-                                  httk_exp_data$FU)
-  
-  #if data is from user-provided experimental data, then identify that in source
-  httk_exp_data$fu_source_fin <-ifelse(!is.na(httk_exp_data$FU),
-                                       'Experimental data',
-                                       httk_exp_data$fu_source)
+  if('fu_value' %in% colnames(httk_data)|'fu_source' %in% colnames(httk_data)){
+    #if experimental data is missing, use the httk data
+    httk_exp_data$FU_value <-ifelse(is.na(httk_exp_data$FU),
+                                    httk_exp_data$fu_value,
+                                    httk_exp_data$FU)
+    
+    #if data is from user-provided experimental data, then identify that in source
+    httk_exp_data$fu_source_fin <-ifelse(!is.na(httk_exp_data$FU),
+                                         'Experimental data',
+                                         httk_exp_data$fu_source)
+  } else{
+    httk_exp_data$FU_value <- httk_exp_data$FU
+    httk_exp_data$fu_source_fin <- 'Experimental data'
+  }
+ 
   
   #------------------------------- CLINT DATA ---------------------------
   # merge two columns together for the source and value of CLint
   #----------------------------------------------------------------------
   
-  #if experimental data is missing, use the httk data
-  httk_exp_data$CLint_value_fin <-ifelse(is.na(httk_exp_data$CLINT),
-                                         httk_exp_data$CLint_value,
-                                         httk_exp_data$CLINT)
+  if('CLint_value' %in% colnames(httk_data)|'CLint_source' %in% colnames(httk_data)){
+    #if experimental data is missing, use the httk data
+    httk_exp_data$CLint_value_fin <-ifelse(is.na(httk_exp_data$CLINT),
+                                           httk_exp_data$CLint_value,
+                                           httk_exp_data$CLINT)
+    
+    #if data is from user-provided experimental data, then identify that in source
+    httk_exp_data$CLint_source_fin <-ifelse(!is.na(httk_exp_data$CLINT),
+                                            'Experimental data',
+                                            httk_exp_data$CLint_source)
+  } else{
+    httk_exp_data$CLint_value_fin <- httk_exp_data$CLINT
+    httk_exp_data$CLint_source_fin <- 'Experimental data'
+  }
   
-  #if data is from user-provided experimental data, then identify that in source
-  httk_exp_data$CLint_source_fin <-ifelse(!is.na(httk_exp_data$CLINT),
-                                          'Experimental data',
-                                          httk_exp_data$CLint_source)
+ 
   
   #if mean_flag = FALSE, the provided experimental data is preferred over httk
   if (mean_flag == TRUE) {
@@ -151,10 +181,10 @@ ExpDataSearch <- function (httk_data, experimental_data_directory,
   httk_exp_data<-rm_df_cols(httk_exp_data,rmv)
   
   #organise df columns
-  httk_exp_data <- httk_exp_data %>% relocate(fu_units, .after = FU_value)
-  httk_exp_data <- httk_exp_data %>% relocate(CLint_value_fin, .before = CLint_units)
-  httk_exp_data <- httk_exp_data %>% relocate(CLint_source_fin, .after = CLint_units)
-  httk_exp_data <- httk_exp_data %>% relocate(BP_fin, .before = BP.exp_source)
+  # httk_exp_data <- httk_exp_data %>% relocate(fu_units, .after = FU_value)
+  # httk_exp_data <- httk_exp_data %>% relocate(CLint_value_fin, .before = CLint_units)
+  # httk_exp_data <- httk_exp_data %>% relocate(CLint_source_fin, .after = CLint_units)
+  # httk_exp_data <- httk_exp_data %>% relocate(BP_fin, .before = BP.exp_source)
   
   #rename clint column
   httk_exp_data <- httk_exp_data %>% rename(CLint_value = CLint_value_fin)
@@ -165,8 +195,8 @@ ExpDataSearch <- function (httk_data, experimental_data_directory,
   httk_exp_data <- httk_exp_data %>% rename(BP_source = BP.exp_source)
   
   #Further Organisation
-  httk_exp_data <- httk_exp_data %>% relocate(InChIKey, .after = COMPOUND.NAME)
-  httk_exp_data$COMPOUND.NAME <- toupper(httk_exp_data$COMPOUND.NAME)
+  #httk_exp_data <- httk_exp_data %>% relocate(InChIKey, .after = Compound)
+  httk_exp_data$Compound <- toupper(httk_exp_data$Compound)
   
   #organise in ascending CS number
   httk_exp_data <- httk_exp_data[order(httk_exp_data$CODE),]

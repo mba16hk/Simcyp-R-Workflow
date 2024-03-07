@@ -7,7 +7,7 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
                         obach = T, wambaugh = T, chem_phys_in_vitro = T,
                         
                         #apply an operation on the collected fu and Clint values
-                        fu_operation = 'arithmetic mean', CLint_operation = 'arithmetic mean'){
+                        fu_operation = 'arithmetic mean', CLint_operation = 'arithmetic mean', species = 'human'){
   
   if (nrow(CAS_DTXSID) == 0) {
     return(message('no data from httk can be found for any of the compounds'))
@@ -18,79 +18,123 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   }
   #------------ Obach2008 -------------------------------------
   
-  if (obach == T){ #if flag is set to TRUE search obach dataset
-    
-    #Start by searching Obach for Clint & fu using CAS numbers
-    Obach_data<-filter(Obach2008, Obach2008$CAS %in% CAS_DTXSID$CAS)
-    if (nrow(Obach_data)>0){
-      Obach_data$Obach2008_source <- 'Obach 2008'
+  if (species == 'human'){
+    if (obach == T){ #if flag is set to TRUE search obach dataset
+      
+      message('Collecting Data from Obach')
+      #Start by searching Obach for Clint & fu using CAS numbers
+      Obach_data<-filter(Obach2008, Obach2008$CAS %in% CAS_DTXSID$CAS)
+      if (nrow(Obach_data)>0){
+        Obach_data$Obach2008_source <- 'Obach 2008'
+      }
+      keep<- c('CAS','fu','CL (mL/min/kg)','Obach2008_source')
+      Obach_data <- keep_df_cols(Obach_data,keep)
     }
-    keep<- c('CAS','fu','CL (mL/min/kg)','Obach2008_source')
-    Obach_data <- keep_df_cols(Obach_data,keep)
   }
+  
+ 
   
 
   #------------ wambaugh2019 -----------------------------------
   
-  if(wambaugh == T){ #if flag is set to TRUE search wambaugh dataset
-    
-    #next is wambaugh 2019 database which contains clint, fu, logP, pKa using CAS
-    wambaugh2019_data<-filter(wambaugh2019, wambaugh2019$CAS %in% CAS_DTXSID$CAS)
-    if (nrow(wambaugh2019_data)>0){
-      wambaugh2019_data$wambaugh2019_source <- 'Wambaugh 2019'
+  if (species == 'human'){
+    if(wambaugh == T){ #if flag is set to TRUE search wambaugh dataset
+      
+      message('Collecting Data from Wambaugh 2019')
+      #next is wambaugh 2019 database which contains clint, fu, logP, pKa using CAS
+      wambaugh2019_data<-filter(wambaugh2019, wambaugh2019$CAS %in% CAS_DTXSID$CAS)
+      if (nrow(wambaugh2019_data)>0){
+        wambaugh2019_data$wambaugh2019_source <- 'Wambaugh 2019'
+      }
+      keep<- c('CAS','Human.Clint.Point','Human.Funbound.plasma.Point',
+               'DSSTox_Substance_Id','wambaugh2019_source')
+      wambaugh2019_data <- keep_df_cols(wambaugh2019_data,keep)
+      
+      #wambaugh2019_data <- wambaugh2019_data %>% rename(DTXSID = DSSTox_Substance_Id)
     }
-    keep<- c('CAS','Human.Clint.Point','Human.Funbound.plasma.Point',
-             'DSSTox_Substance_Id','wambaugh2019_source')
-    wambaugh2019_data <- keep_df_cols(wambaugh2019_data,keep)
-    
-    #wambaugh2019_data <- wambaugh2019_data %>% rename(DTXSID = DSSTox_Substance_Id)
   }
-  
   
   #------------ chem.physical_and_invitro.data ------------------
   
   if (chem_phys_in_vitro == T){ #if flag is set to TRUE search chem.physical_and_invitro.data
-    
+    message('Collecting Data from chem.physical_and_invitro.data database')
     #use chem.physical_and_invitro.data  to get more information on CLint, fu, and BP 
     # query using using DTXSID and CAS
     in_vitro_data<-filter(chem.physical_and_invitro.data,
                           chem.physical_and_invitro.data$CAS %in% CAS_DTXSID$CAS)
-    
-    #only keep human data
-    human_in_vitro <- in_vitro_data[str_detect(in_vitro_data$All.Species,'Human'),]
-    
-    
-    #only keep columns of interest
-    keep <- c('CAS','Human.Clint','Human.Clint.Reference', 'logP', 'MW',
-              'Human.Funbound.plasma','Human.Funbound.plasma.Reference',
-              'Human.Rblood2plasma','Human.Rblood2plasma.Reference','DTXSID',
-              "pKa_Accept","pKa_Accept.Reference","pKa_Donor","pKa_Donor.Reference")
-    human_in_vitro <- keep_df_cols(human_in_vitro, keep)
-    colnames(human_in_vitro) <- c('CAS','DTXSID', "logP","MW","pKa_Accept","pKa_Accept.Reference","pKa_Donor",
-                                  "pKa_Donor.Reference",'CLint1','Clint_source_iv','fu1','PPB_source_iv','BP','BP_source')
-    
-    #ensure that the CAS and DTXSID match 
-    matched_indicies <- match.df(human_in_vitro,CAS_DTXSID,c('CAS','DTXSID'))
-    human_in_vitro <- human_in_vitro[matched_indicies,]
-    
-    #find the arithmetic means of CLints and Fu Values
-    for (i in 1:nrow(human_in_vitro)){
+    if (species=='human'){
+      #only keep human data
+      human_in_vitro <- in_vitro_data[str_detect(in_vitro_data$All.Species,'Human'),]
       
-      human_in_vitro$CLint_iv[i] <- avg_string_of_nums(human_in_vitro$CLint1[i],
-                                                       separator = ',|;')
       
-      human_in_vitro$fu[i] <- avg_string_of_nums(human_in_vitro$fu1[i],
-                                                 separator = ',|;')
+      #only keep columns of interest
+      keep <- c('CAS','Human.Clint','Human.Clint.Reference', 'logP', 'MW',
+                'Human.Funbound.plasma','Human.Funbound.plasma.Reference',
+                'Human.Rblood2plasma','Human.Rblood2plasma.Reference','DTXSID',
+                "pKa_Accept","pKa_Accept.Reference","pKa_Donor","pKa_Donor.Reference")
+      human_in_vitro <- keep_df_cols(human_in_vitro, keep)
+      colnames(human_in_vitro) <- c('CAS','DTXSID', "logP","MW","pKa_Accept","pKa_Accept.Reference","pKa_Donor",
+                                    "pKa_Donor.Reference",'CLint1','Clint_source_iv','fu1','PPB_source_iv','BP','BP_source')
+      
+      #ensure that the CAS and DTXSID match 
+      matched_indicies <- match.df(human_in_vitro,CAS_DTXSID,c('CAS','DTXSID'))
+      human_in_vitro <- human_in_vitro[matched_indicies,]
+      
+      #find the arithmetic means of CLints and Fu Values
+      for (i in 1:nrow(human_in_vitro)){
+        
+        human_in_vitro$CLint_iv[i] <- avg_string_of_nums(human_in_vitro$CLint1[i],
+                                                         separator = ',|;')
+        
+        human_in_vitro$fu[i] <- avg_string_of_nums(human_in_vitro$fu1[i],
+                                                   separator = ',|;')
+      }
+      
+      #remove unwanted columns
+      rm_cols<- c('CLint1','fu1')
+      human_in_vitro <- rm_df_cols(human_in_vitro, rm_cols)
+      
+      # #remove rows made of NAs by finding indicies
+      # ind <- apply(human_in_vitro[,3:ncol(human_in_vitro)], 1, function(x) all(is.na(x)))
+      # indicies <- which(ind == TRUE)
+      # human_in_vitro <- human_in_vitro[-indicies,]
+      
+      
+    } else if (species == 'rat'){
+      
+      #only keep human data
+      rat_in_vitro <- in_vitro_data[str_detect(in_vitro_data$All.Species,'Rat'),]
+      
+      
+      #only keep columns of interest
+      keep <- c('CAS','Rat.Clint','Rat.Clint.Reference', 'logP', 'MW',
+                'Rat.Funbound.plasma','Rat.Funbound.plasma.Reference',
+                'Rat.Rblood2plasma','Rat.Rblood2plasma.Reference','DTXSID',
+                "pKa_Accept","pKa_Accept.Reference","pKa_Donor","pKa_Donor.Reference")
+      rat_in_vitro <- keep_df_cols(rat_in_vitro, keep)
+      colnames(rat_in_vitro) <- c('CAS','DTXSID', "logP","MW","pKa_Accept","pKa_Accept.Reference","pKa_Donor",
+                                    "pKa_Donor.Reference",'CLint1','Clint_source_iv','fu1','PPB_source_iv','BP','BP_source')
+      
+      #ensure that the CAS and DTXSID match 
+      matched_indicies <- match.df(rat_in_vitro,CAS_DTXSID,c('CAS','DTXSID'))
+      rat_in_vitro <- rat_in_vitro[matched_indicies,]
+      
+      #find the arithmetic means of CLints and Fu Values
+      for (i in 1:nrow(rat_in_vitro)){
+        
+        rat_in_vitro$CLint_iv[i] <- avg_string_of_nums(rat_in_vitro$CLint1[i],
+                                                         separator = ',|;')
+        
+        rat_in_vitro$fu[i] <- avg_string_of_nums(rat_in_vitro$fu1[i],
+                                                   separator = ',|;')
+      }
+      
+      #remove unwanted columns
+      rm_cols<- c('CLint1','fu1')
+      rat_in_vitro <- rm_df_cols(rat_in_vitro, rm_cols)
+      human_in_vitro <- rat_in_vitro
+      
     }
-    
-    #remove unwanted columns
-    rm_cols<- c('CLint1','fu1')
-    human_in_vitro <- rm_df_cols(human_in_vitro, rm_cols)
-    
-    # #remove rows made of NAs by finding indicies
-    # ind <- apply(human_in_vitro[,3:ncol(human_in_vitro)], 1, function(x) all(is.na(x)))
-    # indicies <- which(ind == TRUE)
-    # human_in_vitro <- human_in_vitro[-indicies,]
     
     #-----pKa values processing --------
     
@@ -129,42 +173,55 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
     #rename reference columns
     human_in_vitro <- human_in_vitro %>% rename(pKa_acidic_ref = pKa_Donor.Reference)
     human_in_vitro <- human_in_vitro %>% rename(pKa_basic_ref = pKa_Accept.Reference)
+    
   }
   
   #------------ merge the data according to the user-selected databases to use ########
   
-  if (obach == T & wambaugh == T & chem_phys_in_vitro == T){
+  message('Merging data collected from user-selected databases')
+  
+  if (obach == T & wambaugh == T & chem_phys_in_vitro == T & species == 'human'){
     
     #merge all data from 3 databases into a single dataframe
     httk_data_1 <- merge(Obach_data,wambaugh2019_data,by='CAS',all = T)
     httk_data <- merge(httk_data_1,human_in_vitro, by = 'CAS', all = T)
     
-  } else if (obach == T & wambaugh == T & chem_phys_in_vitro != T) {
+  } else if (obach == T & wambaugh == T & chem_phys_in_vitro != T & species == 'human') {
     
     #merge 2 databases into a single dataframe
     httk_data <- merge(Obach_data, wambaugh2019_data, by = 'CAS', all = T)
     
-  } else if (obach == T & wambaugh != T & chem_phys_in_vitro == T) {
+  } else if (obach == T & wambaugh != T & chem_phys_in_vitro == T & species == 'human') {
     
     #merge 2 databases into a single dataframe
     httk_data <- merge(Obach_data, human_in_vitro, by = 'CAS', all = T)
     
-  } else if (obach != T & wambaugh == T & chem_phys_in_vitro == T) {
+  } else if (obach != T & wambaugh == T & chem_phys_in_vitro == T & species == 'human') {
     
     #merge 2 databases into a single dataframe
     httk_data <- merge(wambaugh2019_data, human_in_vitro, by = 'CAS', all = T)
     
-  } else if (obach != T & wambaugh != T & chem_phys_in_vitro == T) {
+  } else if (obach != T & wambaugh != T & chem_phys_in_vitro == T & species != 'human') {
     
     #merge 2 databases into a single dataframe
     httk_data <- human_in_vitro
     
-  } else if (obach != T & wambaugh == T & chem_phys_in_vitro != T) {
+  } else if (obach != T & wambaugh == T & chem_phys_in_vitro == T & species != 'human') {
+    
+    #merge 2 databases into a single dataframe
+    httk_data <- human_in_vitro
+    
+  }else if (obach == T & wambaugh == T & chem_phys_in_vitro == T & species != 'human') {
+    
+    #merge 2 databases into a single dataframe
+    httk_data <- human_in_vitro
+    
+  }else if (obach != T & wambaugh == T & chem_phys_in_vitro != T & species == 'human') {
     
     #merge 2 databases into a single dataframe
     httk_data <- wambaugh2019_data
     
-  } else if (obach == T & wambaugh != T & chem_phys_in_vitro != T) {
+  } else if (obach == T & wambaugh != T & chem_phys_in_vitro != T & species == 'human') {
     
     #merge 2 databases into a single dataframe
     httk_data <- Obach_data
@@ -174,6 +231,7 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   #################################################################################
   
   #-----------------process fu data------------------------------------
+  message('Processing fu data based on user-selected operation')
   
   #find the columns which contain fraction unbound_data
   fraction_unbound_vector <- str_detect(colnames(httk_data),'fu|Funbound')
@@ -311,7 +369,12 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   httk_data$fu_units = "fraction"
   
   #calculate the standard deviation across available sources:
-  httk_data$fu_SD<-apply(fraction_unbound_df,1,function(x) sd(x, na.rm=T))
+  if (is.data.frame(fraction_unbound_df)){
+    httk_data$fu_SD<-apply(fraction_unbound_df,1,function(x) sd(x, na.rm=T))
+  } else{
+    httk_data$fu_SD<-0
+  }
+  
   
   #organise the httk_data columns
   httk_data <- httk_data %>% relocate(fu_units, .after = fu_res)
@@ -320,7 +383,9 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   
   #-----------------process Clint data------------------------------------
   
-  if (wambaugh == T){ #pre-process the wambaugh data
+  message('Processing CLint data based on user-selected operation')
+  
+  if (wambaugh == T & species == 'human'){ #pre-process the wambaugh data
     
     #rename the Clint column 
     httk_data <- httk_data %>% rename(CLint1 = Human.Clint.Point)
@@ -403,7 +468,12 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   httk_data$CLint <- suppressWarnings(as.numeric(httk_data$CLint))
   
   #calculate the standard deviation across available sources:
-  httk_data$CLint_SD<-apply(clint_df,1,function(x) sd(x, na.rm=T))
+  if (is.data.frame(fraction_unbound_df)){
+    httk_data$CLint_SD<-apply(clint_df,1,function(x) sd(x, na.rm=T))
+  } else{
+    httk_data$CLint_SD<-0
+  }
+  
   
   #set the units for CLint
   httk_data$CLint_units = "uL/min/million cells"
@@ -472,7 +542,7 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   
   #-----------------process sys clearance data------------------------------------
   
-  if (obach == T){
+  if (obach == T & species == 'human'){
     #organise the source of systemic clearance (which comes only from Obach data)
     httk_data <- httk_data %>% rename(Systemic_CL = `CL (mL/min/kg)`)
     if (nrow(Obach_data)>0){
@@ -502,13 +572,13 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   
   
   #organise the httk_data columns
-  httk_data <- httk_data %>% relocate(Systemic_CL_units, .after = Systemic_CL)
+  {httk_data <- httk_data %>% relocate(Systemic_CL_units, .after = Systemic_CL)
   httk_data <- httk_data %>% relocate(CLint_units, .after = CLint)
   httk_data <- httk_data %>% relocate(CLint_SD, .after = CLint)
   httk_data <- httk_data %>% relocate(CLint_source, .after = CLint_units)
   httk_data <- httk_data %>% rename(CLint_value = CLint)
   httk_data <- httk_data %>% rename(fu_value = fu_res)
-  httk_data <- httk_data %>% rename(BP_value = BP)
+  httk_data <- httk_data %>% rename(BP_value = BP)}
   
   #merge the data collected from httk with the CAS rn and InchiKeys
   httk_data_inchi <- merge(httk_data, CAS_DTXSID, by = 'CAS', all.x = T)
@@ -518,6 +588,7 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   
   #populate additional columns if available
   #find available columns and store in a vector in order to merge with ChEMBL data
+  message('Cleaning up collected data')
   potential_headers <- c('DOSE','DOSEUNITS','VSSMETHOD')
   additional_names<-keep_df_cols(info,potential_headers)
   if (length(additional_names)==0){
@@ -529,18 +600,11 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   
   #merge the httk_data_inchi with the data curated from ChEMBL/sus dat
   physchem_httk <- merge(physchem_data, httk_data_inchi,
-                         by.x = c('InChIKey','CODE',additional_names), 
-                         by.y = c('StdInChIKey','CODE',additional_names),
+                         by.x = c('COMPOUND','CODE','INCHIKEY',additional_names), 
+                         by.y = c('COMPOUND','CODE','StdInChIKey',additional_names),
                          all = T)
   
   if (chem_phys_in_vitro == T){
-  
-  #take compound names and smiles if unavailable
-  physchem_httk$COMPOUND.NAME <- ifelse(is.na(physchem_httk$COMPOUND.NAME),
-                               toupper(physchem_httk$Compound), physchem_httk$COMPOUND.NAME)
-  physchem_httk$SMILES.x <- ifelse(is.na(physchem_httk$SMILES.x),
-                                        physchem_httk$SMILES.y, physchem_httk$SMILES.x)
-  
   
   #NOTE: Chembl httk values are favoured over httk, change these commands if you want otherwise
   
@@ -549,17 +613,17 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
                                physchem_httk$MW.y, physchem_httk$MW.x)
   
   #take logP from httk if unavilable
-  physchem_httk$logPow <- ifelse(is.na(physchem_httk$logPow),
-                               physchem_httk$logP, physchem_httk$logPow)
+  physchem_httk$logPow <- ifelse(is.na(physchem_httk$CXLogP),
+                               physchem_httk$logP, physchem_httk$CXLogP)
   
   
   #if the source is not chembl, take acidic and basic pka values form httk
-  chembl_mentions <- str_detect(tolower(physchem_httk$data_source),'chembl')
+  chembl_mentions <- str_detect(tolower(physchem_httk$Source),'chembl')
   chembl_mentions <- ifelse(is.na(chembl_mentions),FALSE,chembl_mentions)
-  physchem_httk$Acidic..pKa <- ifelse(chembl_mentions | !is.na(physchem_httk$Acidic..pKa),
-                                      physchem_httk$Acidic..pKa, physchem_httk$pKa_acidic)
-  physchem_httk$Basic.pKa <- ifelse(chembl_mentions | !is.na(physchem_httk$Basic.pKa),
-                                      physchem_httk$Basic.pKa, physchem_httk$pKa_basic)
+  physchem_httk$Acid_pka <- ifelse(chembl_mentions | !is.na(physchem_httk$Acid_pka),
+                                      physchem_httk$Acid_pka, physchem_httk$pKa_acidic)
+  physchem_httk$Base_pka <- ifelse(chembl_mentions | !is.na(physchem_httk$Base_pka),
+                                      physchem_httk$Base_pka, physchem_httk$pKa_basic)
   
   #organise pKa sources from httk
   httk_pKa_sources <- apply(physchem_httk[,c('pKa_acidic_ref','pKa_basic_ref')], 1, 
@@ -568,12 +632,12 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
   httk_pKa_sources <- paste('httk:', httk_pKa_sources, sep=' ')
   
   #if there are pKa values but the source is NA, add the httk_pKa_source
-  physchem_httk$data_source <- ifelse(is.na(physchem_httk$data_source),
-                                      httk_pKa_sources, physchem_httk$data_source)
+  physchem_httk$Source <- ifelse(is.na(physchem_httk$Source),
+                                      httk_pKa_sources, physchem_httk$Source)
   
   }
   
-  if (wambaugh == T & chem_phys_in_vitro == T){
+  if (wambaugh == T & chem_phys_in_vitro == T & species =='human'){
   
   #check that DTXSID match between invitro dataset and wambaugh
   unmatched <- c()
@@ -609,13 +673,12 @@ httkSearch <- function (physchem_data, CAS_DTXSID, info,
 
   #oraganise data set
   if ('DOSE' %in% colnames(physchem_httk)){
-    physchem_httk <- physchem_httk %>% relocate(DOSE, .after = ChEMBL.ID)
+    physchem_httk <- physchem_httk %>% relocate(DOSE, .after = CHEMBL_id)
   }
   
   if (chem_phys_in_vitro == T){
-  physchem_httk <- physchem_httk %>% relocate(DTXSID.y, .after = ChEMBL.ID)
+  physchem_httk <- physchem_httk %>% relocate(DTXSID.y, .after = CHEMBL_id)
   #rename columns
-  physchem_httk <- physchem_httk %>% rename(SMILES = SMILES.x)
   physchem_httk <- physchem_httk %>% rename(DTXSID = DTXSID.y)
   physchem_httk <- physchem_httk %>% rename(MW = MW.x)
   }

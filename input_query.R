@@ -21,12 +21,12 @@ ProcessInputs <- function (file_directory){
   #load the data based on the extracted extension
   if (extension == 'xlsx'){
     
-    import<-loadWorkbook(file_directory, create=FALSE)
-    cmpd_data <- readWorksheet(import,  header = TRUE, sheet = 1)
+    cmpd_data <- read_excel(file_directory, sheet = 1)
+
     
   } else if (extension == 'csv'){
     
-    cmpd_data <- read.csv(file_directory, header = T, sep = ',')
+    cmpd_data <- read.csv(file_directory, header = T, sep = ',',fileEncoding = 'UTF-8-BOM')
     
   } else {
     
@@ -38,7 +38,7 @@ ProcessInputs <- function (file_directory){
   colnames(cmpd_data)<-data_headers
   
   #Keep columns of interest to us
-  data <- cmpd_data[,c('CODE','SMILES','COMPOUND','INCHIKEY')]
+  data <- cmpd_data[,c('CODE','COMPOUND','INCHIKEY')]
   
   if ('INCHIKEY' %!in% colnames(data)){
     return(message('Please provide compound inchikeys and ensure the inchikey header is spelled as inchikey'))

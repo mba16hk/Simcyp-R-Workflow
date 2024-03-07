@@ -1,7 +1,6 @@
-library(stringr)
+### Epi Suite Search
 
-#search the EPI Suite database for the missing compounds
-SusdatSearch <- function (info, nf_in_chembl, ChEMBL_search, logP_selection_flag =1 ){
+NormanSearch <- function (info, logP_selection_flag =1 ){
   
   #set the working directory to the norman suspect list database (which uses EPI Suite values)
   sus_dir<-paste0(dirname(dirname(rstudioapi::getSourceEditorContext()$path)),
@@ -13,11 +12,7 @@ SusdatSearch <- function (info, nf_in_chembl, ChEMBL_search, logP_selection_flag
   
   #search the suspect database using standard inchikeys and MS ready inchikeys
   found_in_susdat<-filter(susdat, 
-                       susdat$StdInChIKey %in%  nf_in_chembl$INCHIKEY)
-  
-  if (nrow(found_in_susdat)==0){
-    return(ChEMBL_search)
-  }
+                          susdat$StdInChIKey %in%  info$INCHIKEY)
   
   #remove duplicates based on the Norman ID
   found_in_susdat<-found_in_susdat[!duplicated(found_in_susdat$Norman_ID),]
@@ -33,7 +28,7 @@ SusdatSearch <- function (info, nf_in_chembl, ChEMBL_search, logP_selection_flag
   }
   
   keep<-c('StdInChIKey','SMILES','Monoiso_Mass', 'Molecular_Formula', 'StdInChI',
-          'logKow_EPISuite', 'Exp_logKow_EPISuite')
+          'logKow_EPISuite', 'Exp_logKow_EPISuite','PubChem_CID','CAS_RN_Dashboard')
   found_in_susdat<- keep_df_cols(found_in_susdat, keep)
   
   #merge codes
@@ -98,73 +93,22 @@ SusdatSearch <- function (info, nf_in_chembl, ChEMBL_search, logP_selection_flag
                or Set logP_selection_flag to 2 for prioritizing predicted data'))
     
   }
-
+  
   
   if (length(keep_df_cols(info,c('DOSE','DOSEUNITS','VSSMETHOD'))) > 0){
     found_in_susdat <- merge(found_in_susdat, 
-                          keep_df_cols(info,c('INCHIKEY','DOSE','DOSEUNITS','VSSMETHOD')), 
-                          by.x = 'StdInChIKey', by.y = 'INCHIKEY', all.x = T)
+                             keep_df_cols(info,c('INCHIKEY','DOSE','DOSEUNITS','VSSMETHOD')), 
+                             by.x = 'StdInChIKey', by.y = 'INCHIKEY', all.x = T)
   }
   
   rm(susdat, keep)
-
-  #find available columns and store in a vector in order to merge with ChEMBL data
-  potential_headers <- c('DOSE','DOSEUNITS','VSSMETHOD')
-  additional_names<-keep_df_cols(info,potential_headers)
-  if (length(additional_names)==0){
-    additional_names <- c()
-  } else{
-    indicies <- which(potential_headers %in% colnames(info))
-    additional_names <- potential_headers[indicies]
-  }
   
-  if (nrow(ChEMBL_search)==0){
-    colnames(found_in_susdat)[1] <- 'INCHIKEY'
-    colnames(found_in_susdat)[5] <- 'MW'
-    colnames(found_in_susdat)[6] <- 'logPow'
-    found_in_susdat$MWfreebase <- NA
-    #found_in_susdat$COMPOUND.NAME <- 
-    return(found_in_susdat)
-  } else{
-    
-    #merge the susdata with the ChEMBL Search
-    ChEMBL_sus_search<-merge(ChEMBL_search, found_in_susdat,
-                             by.x = c('InChIKey', 'CODE', 'SMILES','Molecular_Formula', 'Standard.Inchi',
-                                      'MW', 'logPow','data_source', additional_names), 
-                             by.y = c('StdInChIKey','CODE', 'SMILES','Molecular_Formula', 'StdInChI',
-                                      'Monoiso_Mass','LogP','data_source',additional_names),
-                             all= T)
-    
-    #repopulate SMILES
-    missing_smiles_indicies <- which(is.na(ChEMBL_sus_search$SMILES))
-    missing_smiles_inchi <- ChEMBL_sus_search$InChIKey[missing_smiles_indicies]
-    found_smiles_indicies <- which(info$INCHIKEY %in% missing_smiles_inchi)
-    
-    #found SMILES
-    ordered_inchi_info <- info[match(missing_smiles_inchi, info$INCHIKEY), ]
-    ChEMBL_sus_search$SMILES[missing_smiles_indicies]<-ordered_inchi_info$SMILES
-    
-    #repopulate compound name
-    missing_name_indicies <- which(is.na(ChEMBL_sus_search$COMPOUND.NAME))
-    missing_name_inchi <- ChEMBL_sus_search$InChIKey[missing_name_indicies]
-    found_name_indicies <- which(info$INCHIKEY %in% missing_name_inchi)
-    
-    #found names
-    ordered_inchi_info <- info[match(missing_name_inchi, info$INCHIKEY), ]
-    ChEMBL_sus_search$COMPOUND.NAME[missing_name_indicies]<-toupper(ordered_inchi_info$COMPOUND)
-    
-    #Organise dataframe columns
-    ChEMBL_sus_search <- ChEMBL_sus_search %>% relocate(SMILES, .after = InChIKey)
-    ChEMBL_sus_search <- ChEMBL_sus_search %>% relocate(CODE, .before = InChIKey)
-    ChEMBL_sus_search <- ChEMBL_sus_search %>% relocate(COMPOUND.NAME, .after = CODE)
-    ChEMBL_sus_search <- ChEMBL_sus_search %>% relocate(MW, .before = MWfreebase)
-    ChEMBL_sus_search <- ChEMBL_sus_search %>% relocate(data_source, .after = HBD)
-    ChEMBL_sus_search <- ChEMBL_sus_search %>% relocate(logPow, .before = logD)
-    ChEMBL_sus_search <- ChEMBL_sus_search %>% relocate(Molecular_Formula, .after = SMILES)
-    
-    return(ChEMBL_sus_search)
-    
-  }
+
+  colnames(found_in_susdat)[1] <- 'INCHIKEY'
+  colnames(found_in_susdat)[2] <- 'CAS'
+  colnames(found_in_susdat)[7] <- 'MW'
+  return(found_in_susdat)
+
   
 }
 
@@ -190,7 +134,7 @@ CAS_and_DTXSID<- function(info){
   
   #search the suspect database using standard inchikeys and MS ready inchikeys
   found_in_susdat<-filter(susdat, 
-                           susdat$StdInChIKey %in%  info$INCHIKEY)
+                          susdat$StdInChIKey %in%  info$INCHIKEY)
   
   #remove duplicates based on the Norman ID if the duplicates are present
   if (TRUE %in% duplicated(found_in_susdat$Norman_ID)){
@@ -209,14 +153,14 @@ CAS_and_DTXSID<- function(info){
   if (length(missing_cas) > 0){
     CAS_DTXSID <- CAS_DTXSID[-missing_cas,]
   }
-
+  
   #remove prefix in CAS_RN
   CAS_DTXSID$CAS_RN <- gsub("CAS_RN:\\s","",CAS_DTXSID$CAS_RN)
   
   #rename CAS column
   CAS_DTXSID <- CAS_DTXSID %>% rename(CAS = CAS_RN)
   
-  #if there is an OR seprator (|), make multiple entries for the CAS 
+  #if there is an OR seprator (|), make multiple entries for the CAS
   multiple_CAS_indicies <- which(str_detect(CAS_DTXSID$CAS, "\\|")==T)
   multiple_CAS <- CAS_DTXSID[multiple_CAS_indicies,]
   
@@ -229,10 +173,11 @@ CAS_and_DTXSID<- function(info){
       data <- as.data.frame(cbind(rep(multiple_CAS$StdInChIKey[i],number_of_new_CAS),
                                   Additional_CAS_numbers,
                                   rep(multiple_CAS$DTXSID[i],number_of_new_CAS),
-                                  rep(multiple_CAS$Code[i],number_of_new_CAS),
-                                  rep(multiple_CAS$Compound[i],number_of_new_CAS),
+                                  rep(multiple_CAS$CODE[i],number_of_new_CAS),
+                                  rep(multiple_CAS$COMPOUND[i],number_of_new_CAS),
                                   rep(multiple_CAS$SMILES[i],number_of_new_CAS)))
       colnames(data) <- colnames(CAS_DTXSID)
+      #print(CAS_DTXSID)
       new_data <- rbind(new_data,data)
       
     }
@@ -241,7 +186,7 @@ CAS_and_DTXSID<- function(info){
     #add the new CAS data
     CAS_DTXSID <- rbind(CAS_DTXSID,new_data)
   }
-
+  
   return(CAS_DTXSID)
 }
 

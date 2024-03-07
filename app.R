@@ -4,14 +4,13 @@ library(shinydashboardPlus)
 library(DT)
 library(shinyBS)
 library(shinyWidgets)
+library(shinycssloaders)
 
 
 setwd(dirname(rstudioapi::getSourceEditorContext()$path))
 #import the scripts 
 source('input_query.R')
-source('chembl_search.R')
-source('susdat_search.R')
-source('Additional_data.R')
+source('SimRFlow_DataCollection_Module.R')
 source('ACD_Labs.R')
 source('httk_search.R')
 source('experimental_data_search.R')
@@ -20,8 +19,14 @@ source('Additional_data.R')
 source('R Workflow.R')
 source('PredictParams.R')
 source('plotting_functions.R')
-source('SIVA_invitro_distribution.R')
 
+circles <- rep("\u2b24",8)
+all_cols <- c('darkgreen', 'gold','orange','indianred','red','royalblue','purple','lightseagreen')
+
+colored_circles <- list()
+for (i in 1:length(all_cols)){
+  colored_circles[[i]] <- HTML(paste0("<font color='", all_cols[i], "'>",circles[i],"</font>"))
+}
 
 ui <- dashboardPage( skin = 'black',
     dashboardHeader(title = "SimRFlow"),
@@ -37,9 +42,6 @@ ui <- dashboardPage( skin = 'black',
                   menuItem('Plot Outputs',
                            tabName = 'plotting_outputs',
                            icon = icon('chart-area')),
-                  # menuItem('In Vitro Distribution',
-                  #          tabName = 'SIVA_module',
-                  #          icon = icon('flask'), badgeLabel = "new", badgeColor = "green"),
                   menuItem('Help',
                            tabName = 'help_section',
                            icon = icon('question-circle')))
@@ -47,6 +49,7 @@ ui <- dashboardPage( skin = 'black',
     
     dashboardBody(
       tabItems(
+        
         tabItem('data_collection',
                 #first row
                 fluidRow(column(width = 3,
@@ -62,7 +65,7 @@ ui <- dashboardPage( skin = 'black',
                              placement="bottom", trigger = "hover"),
 
                       #button to collect physiochemical information
-                      uiOutput('ui.action'), width = 12),
+                      uiOutput('physchem_database_options_ui'), width = 12),
                       
                       #br(),
                       
@@ -409,11 +412,11 @@ ui <- dashboardPage( skin = 'black',
                   status = 'primary',
                   width = 12,
                   tabBox(
-                    
+                    height = "690px",
                     #visualise simcyp outputs table
-                    tabPanel('Predicted Outputs',
-                             column(dataTableOutput("pred_output_tbl"),
-                                    width = 12)), width = 12), collapsible = T)
+                    tabPanel('Predicted Outputs', height = "650px",
+                             column(dataTableOutput("pred_output_tbl" ),
+                                    width = 12,height = "650px")), width = 12), collapsible = T)
                 
                 ),
         
@@ -442,11 +445,20 @@ ui <- dashboardPage( skin = 'black',
                             # conditional panel for dose units
                             conditionalPanel(
                               condition = "output.determine_inputs == 0 || output.determine_inputs == 1 ||output.determine_inputs == 3 || output.determine_inputs == 6",
-                              selectInput('dose_units',
-                                          'Dose Units',
-                                          list("mg/kg" = "mg/kg",
-                                               "mg" = "mg",
-                                               "mg/m^2" = "mg/m^2"))),
+                              
+                              fluidRow(
+                                column(width = 3,selectInput('dose_units',
+                                                             'Dose Units',
+                                                             list("mg/kg" = "mg/kg",
+                                                                  "mg" = "mg",
+                                                                  "mg/m^2" = "mg/m^2"))),
+                                column(width = 9,selectInput('use_fu_GFR',
+                                                             'For compounds with missing Hepatic clearance, assume renal clearance using:',
+                                                             list("MechKiM model" = F,
+                                                                  "fu*GFR" = T)))
+                              )
+
+                              ),
                         
                         #,
                         p('Assumptions:'),
@@ -630,10 +642,16 @@ ui <- dashboardPage( skin = 'black',
                   width = 12,
                   tabBox(
                     
+                    #visualise simcyp input table
+                    tabPanel('Simcyp Inputs',
+                             'The collected data is processed and used to parametrise the Simcyp Simulator:',
+                             column(withSpinner(dataTableOutput("simcyp_input_tbl"),color="black"),
+                                    width = 12)),
+                    
                     #visualise simcyp outputs table
                     tabPanel('Concentration-Time Profiles',
                              'The concentration time profiles of all simulated compounds and their corresponding subjects in different tissues:',
-                             column(dataTableOutput("TBL4"),
+                             column(withSpinner(dataTableOutput("TBL4"),color="black"),
                                     width = 12)),
                     
                     
@@ -649,6 +667,14 @@ ui <- dashboardPage( skin = 'black',
                 
                 #Custom CSS
                 tags$head(tags$style("#conc_time_box{height:1000px !important;}")),
+                
+                tags$style(HTML('.circle {
+                     width: 20px;
+                     height: 20px;
+                     border-radius: 50%;
+                     display: inline-block;
+                     margin-right: 10px;
+                   }')),
                 
                 #plotting
                 conditionalPanel(
@@ -670,15 +696,26 @@ ui <- dashboardPage( skin = 'black',
                                           fluidRow(column(uiOutput("compound_lists"), width = 6),column(uiOutput("tissue_lists"), width = 6)),
                                           
                                           #select y axis units
-                                          selectInput('unit', 'Concentration Units',
-                                                      choices = list('ng/mL'= 'ng/mL','uM'='uM')),
+                                          fluidRow(
+                                            
+                                            column(width = 4,selectInput('unit', 'Concentration Units',
+                                                                         choices = list('ng/mL'= 'ng/mL','μM'='uM'))),
+                                            column(width = 3,
+                                                   #Select Log Scale or Normal Scale
+                                                   radioButtons('log_scale','y-axis scaling', 
+                                                                choices = c('Logarithmic'= T,
+                                                                            'Natural'= F),
+                                                                selected = F, inline = T)),
+                                            
+                                            column(width = 5,
+                                                   #Select Log Scale or Normal Scale
+                                                   radioButtons('confidence_intervals','Plot View', 
+                                                                choices = c('Mean + Confidence Intervals'= T,
+                                                                            'Subject View'= F),
+                                                                selected = F, inline = T))
+                                            
+                                          ),
                                           
-                                          #Select Log Scale or Normal Scale
-                                          radioButtons('log_scale','y-axis scaling', 
-                                                       choices = c('Logarithmic'= T,
-                                                                   'Natural'= F),
-                                                       selected = F), 
-
                                           #plot the concentration-time profile
                                           plotOutput("conc_time_plot", height = '560px')), 
                                           #download the conc-time plot
@@ -725,18 +762,14 @@ ui <- dashboardPage( skin = 'black',
                                                                      'Adipose Cmax' = 'Cmax_ADIPOSE')),
                                           
                                             #select plot colour
-                                            selectInput('plot_col', 'Plot Colour',
-                                                        choices = list('Green'= 'darkolivegreen3',
-                                                                       'Burgundy' = 'indianred',
-                                                                       'Red' = 'firebrick1',
-                                                                       'Blue'='royalblue',
-                                                                       'Yellow'='goldenrod1',
-                                                                       'Pink'='hotpink3',
-                                                                       'Purple'='mediumpurple2',
-                                                                       'Orange'='orange',
-                                                                       'Teal'='lightseagreen',
-                                                                       'Black' = 'gray0')),
                                           
+                                          radioButtons(inputId = "plot_col",
+                                                       label = "Plot Colour",
+                                                       choiceNames = colored_circles,
+                                                       choiceValues = all_cols,
+                                                       selected = 'red', inline=TRUE),
+                                          
+                                            
                                           #Distribution Plot
                                           plotOutput("distribution_plot",  height = '560px'),
                                           #download the distribution_plot plot
@@ -809,17 +842,12 @@ ui <- dashboardPage( skin = 'black',
                                           
    
                                           #select plot colour
-                                          selectInput('plot_col2', 'Plot Colour',
-                                                      choices = list('Green'= 'darkolivegreen3',
-                                                                     'Burgundy' = 'indianred',
-                                                                     'Red' = 'firebrick1',
-                                                                     'Blue'='royalblue',
-                                                                     'Yellow'='goldenrod1',
-                                                                     'Pink'='hotpink3',
-                                                                     'Purple'='mediumpurple2',
-                                                                     'Orange'='orange',
-                                                                     'Teal'='lightseagreen',
-                                                                     'Black' = 'gray0')),
+                                          
+                                          radioButtons(inputId = "plot_col2",
+                                                       label = "Plot Colour",
+                                                       choiceNames = colored_circles,
+                                                       choiceValues = all_cols,
+                                                       selected = 'red', inline=TRUE),
                                           
                                           plotOutput("relationship_plot",  height = '560px'),
                                           #download the relationship_plot plot
@@ -855,17 +883,23 @@ ui <- dashboardPage( skin = 'black',
                                                                        'Muscle Cmax' = 'Cmax_MUSCLE',
                                                                        'Adipose Cmax' = 'Cmax_ADIPOSE')), width = 6),
                                             
-                                            column(selectInput('plot_col_2', 'Bar Colour',
-                                                               choices = list('Green'= 'darkolivegreen3',
-                                                                              'Burgundy' = 'indianred',
-                                                                              'Red' = 'firebrick1',
-                                                                              'Blue'='royalblue',
-                                                                              'Yellow'='goldenrod1',
-                                                                              'Pink'='hotpink3',
-                                                                              'Purple'='mediumpurple2',
-                                                                              'Orange'='orange',
-                                                                              'Teal'='lightseagreen',
-                                                                              'Black' = 'gray0')), width = 6)),
+                                            radioButtons(inputId = "plot_col_2",
+                                                         label = "Plot Colour",
+                                                         choiceNames = colored_circles,
+                                                         choiceValues = all_cols,
+                                                         selected = 'red', inline=TRUE)),
+                                            
+                                            # column(selectInput('plot_col_2', 'Bar Colour',
+                                            #                    choices = list('Green'= 'darkolivegreen3',
+                                            #                                   'Burgundy' = 'indianred',
+                                            #                                   'Red' = 'firebrick1',
+                                            #                                   'Blue'='royalblue',
+                                            #                                   'Yellow'='goldenrod1',
+                                            #                                   'Pink'='hotpink3',
+                                            #                                   'Purple'='mediumpurple2',
+                                            #                                   'Orange'='orange',
+                                            #                                   'Teal'='lightseagreen',
+                                            #                                   'Black' = 'gray0')), width = 6)),
 
                                           #Select in ascending order or compound alphanumeric order
                                           radioButtons('param_order','x-axis ordering', 
@@ -916,17 +950,24 @@ ui <- dashboardPage( skin = 'black',
                                                                          'Polar Surface Area'= 'PSA',
                                                                          'Hydrogen Bond Donor Count'= 'HBD')), width = 4),
                                             
-                                            column(selectInput('plot_col3', 'Bar Colour',
-                                                               choices = list('Green'= 'darkolivegreen3',
-                                                                              'Burgundy' = 'indianred',
-                                                                              'Red' = 'firebrick1',
-                                                                              'Blue'='royalblue',
-                                                                              'Yellow'='goldenrod1',
-                                                                              'Pink'='hotpink3',
-                                                                              'Purple'='mediumpurple2',
-                                                                              'Orange'='orange',
-                                                                              'Teal'='lightseagreen',
-                                                                              'Black' = 'gray0')), width = 4)),
+                                            
+                                            radioButtons(inputId = "plot_col3",
+                                                         label = "Plot Colour",
+                                                         choiceNames = colored_circles,
+                                                         choiceValues = all_cols,
+                                                         selected = 'red', inline=TRUE)),
+                                            
+                                            # column(selectInput('plot_col3', 'Bar Colour',
+                                            #                    choices = list('Green'= 'darkolivegreen3',
+                                            #                                   'Burgundy' = 'indianred',
+                                            #                                   'Red' = 'firebrick1',
+                                            #                                   'Blue'='royalblue',
+                                            #                                   'Yellow'='goldenrod1',
+                                            #                                   'Pink'='hotpink3',
+                                            #                                   'Purple'='mediumpurple2',
+                                            #                                   'Orange'='orange',
+                                            #                                   'Teal'='lightseagreen',
+                                            #                                   'Black' = 'gray0')), width = 4)),
                                           
 
                                           #plot the concentration-time profile
@@ -945,202 +986,7 @@ ui <- dashboardPage( skin = 'black',
                 
         ), #end of tabItem
         
-        tabItem('SIVA_module',
-                
-                fluidRow(
-                  
-                  tags$head(tags$style("#SIVA_boxes{height:360px !important;}")),
-                  
-                       #Ask the user to input a file of compounds & Experimental Data
-                       box(id = "SIVA_boxes",title = 'In Vitro Distribution Inputs',
-                           
-                           fluidRow(column(width = 9, 
-                                           tipify(fileInput("SIVA_file", "CSV/TXT Input File",
-                                                            buttonLabel=list(icon("folder"),"Browse"),
-                                                            multiple = FALSE, #doesn't allow multi-file upload
-                                                            accept = c(".txt",".csv"),
-                                                            placeholder = 'cmpnds.csv'),
-                                                  "Ensure headers 'CAS, INCHIKEY, NAME, FU' are present",
-                                                  placement="bottom", trigger = "hover")),
-                                    
-                                    column(width = 3, style = "margin-top: +25px;",
-                                           #button to collect information for SIVA
-                                           tipify(actionButton("search_SIVA_data",
-                                                               label = "Curate Data",
-                                                               icon = icon('search'),
-                                                               style = 'color: #fff; background-color: #a44f2e; border-color: #8a2b07'),
-                                                  "Search for physchem data and Henry's law constant.",
-                                                  placement="bottom", trigger = "hover"))
-                                    
-                                    ),
 
-                           conditionalPanel(
-                             condition = "input.search_SIVA_data > 0",
-                             fluidRow(
-                               
-                               column(width = 4,
-                                      boxPad(
-                                        color = "red",
-                                        style = "height: 75px",
-                                        descriptionBlock(
-                                          header = textOutput("missing_comp_num"), 
-                                          text = "Missing Compounds", 
-                                          rightBorder = FALSE,
-                                          marginBottom = TRUE
-                                        ))),
-                               
-                               column(
-                                 width = 4,
-                                 boxPad(
-                                   color = "yellow",
-                                   style = "height: 75px",
-                                   descriptionBlock(
-                                     header = textOutput("duplicated_comp_num"),  
-                                     text = "Duplicated Compounds", 
-                                     rightBorder = FALSE,
-                                     marginBottom = TRUE
-                                   ))),
-                               
-                               column(width = 4,
-                                      boxPad(
-                                        color = "blue",
-                                        style = "height: 75px",
-                                        descriptionBlock(
-                                          header = textOutput("missing_hlc_num"),  
-                                          text = "Missing HLC", 
-                                          rightBorder = FALSE,
-                                          marginBottom = TRUE
-                                        )))
-                             ),
-                             
-                             br(),
-                             
-                             conditionalPanel(condition = "output.missing_comp_num==0 && output.duplicated_comp_num==0 && output.missing_hlc_num ==0",
-                                              p("You may proceed to predicting the in vitro distribution.")),
-                             
-                             conditionalPanel(condition = "output.missing_comp_num!=0 || output.duplicated_comp_num!=0 || output.missing_hlc_num !=0",
-                                              p("Optional: You may download the curated data file, populate the missing entries by manullay searching for them, and reupload here:"),
-                                              
-                                              fluidRow(column(width = 9,tipify(fileInput("SIVA_file_reupload", "CSV/EXCEL Input File",
-                                                               buttonLabel=list(icon("folder"),"Browse"),
-                                                               multiple = FALSE, #doesn't allow multi-file upload
-                                                               accept = c(".xlsx",".csv"),
-                                                               placeholder = 'cmpnds_updated.csv'),
-                                                     "Optionally re-upload the collected data file containing missing entries.",
-                                                     placement="bottom", trigger = "hover")),
-                                              
-                                              column(width = 3, style = "margin-top: +25px;",
-                                                     #button to collect information for SIVA
-                                                     tipify(actionButton("update_SIVA_data",
-                                                                         label = "Update Data",
-                                                                         icon = icon('search'),
-                                                                         style = 'color: #fff; 
-                           background-color: #a44f2e; border-color: #8a2b07'),
-                                                            "Update the SIVA curated data.",
-                                                            placement="bottom", trigger = "hover")))
-                                              
-                                              
-                                              ),
-                             
-                             
-                             
-                           ),
-
-                           status = "primary", 
-                           solidHeader = FALSE,
-                           width = 6),
-                       
-                       box(id = "SIVA_boxes", title = 'In Vitro Distribution Parameters',
-                           
-                           
-                           fluidRow(
-                             column(
-                               width = 6,
-                               
-                               #set the nominal concentration
-                               numericInput('nominal_conc', 'Nominal Concentration (M)',
-                                            value = 1e-5, min = 1e-10, max = 1e10),
-                               
-                               #set the number of cells
-                               numericInput('number_cells', 'Cell Number',
-                                            value = 1000, min = 100, max = 20000),
-                               
-                               #set the pH of the medium
-                               numericInput('medium_pH', 'Media pH',
-                                            value = 7.4, min = 0, max = 14)
-                               
-                               
-                             ), #end of column
-                             
-                             column(
-                               width = 6,
-                               
-                               #set the volume of the well
-                               numericInput('vol_well', 'Well Volume (uL)',
-                                            value = 360, min = 50, max = 10000),
-                               
-                               #set the well diameter
-                               numericInput('well_diameter', 'Well Diameter (mm)',
-                                            value = 6.4, min = 0.1, max = 25),
-                               
-                               #set the serum fraction
-                               numericInput('serum_fraction', 'Serum fraction',
-                                            value = 0.1, min = 0.00000001, max = 1)
-                               
-                               
-                             )), #end of column
-                           
-                           #button to collect information for SIVA
-                           actionButton("predict_iv_distribution",
-                                               label = "Predict In Vitro Distribution",
-                                               icon = icon('laptop-code'),
-                                               style = 'color: #fff; 
-                           background-color: #a44f2e; border-color: #8a2b07; padding:8px; font-size:100%; float:center; width:330px'),
-
-                           status = "primary", 
-                           solidHeader = FALSE,
-                           width = 6)
-                       
-                       ),
-                
-                #Custom CSS
-                tags$head(tags$style("#my_box{height:700px !important;}")),
-                
-                conditionalPanel(
-                  condition = "input.search_SIVA_data > 0",
-                
-                box(id = "my_box",title = 'In Vitro Distribution Outputs',
-                    
-                    tabBox( height = "630px",
-                      #Curated data table
-                      tabPanel("Curated Data", height = "560px",
-                               column(width = 12, dataTableOutput("SIVA_curated_data_tbl"),style = "height:560px; overflow-y: scroll;overflow-x: scroll;"), 
-                                      width = 12),
-                      
-                      #SIVA output table
-                      tabPanel("In Vitro Distribution Predictions", height = "560px",
-                               column(width = 12, dataTableOutput("SIVA_output_tbl"),style = "height:560px; overflow-y: scroll;overflow-x: scroll;"),  
-                                      width = 12),
-                      
-                      #SIVA output plots
-                      tabPanel("In Vitro Distribution Plots", height = "560px",
-                               column(width = 12, plotOutput("SIVA_output_plots",height = '500px')), 
-                               downloadButton(outputId = "Cat10", label = "Download Plots"),
-                               width = 12),
-                      
-                      width = 12
-                    ),
-                    
-                    status = "primary", 
-                    solidHeader = FALSE,
-                    width = 12))
-                
-                
-                
-                
-                
-        ), #end of tabItem
-        
         tabItem('help_section',
                 uiOutput('HelpPageText'),
                 #HTML("<ul><li>...text...</li><li>...more text...</li></ul>") #bullet points
@@ -1210,34 +1056,29 @@ server <- function(input, output, session) {
                                             buttons = c('csv', 'excel')
                                           ))
     
-    
-    
-    output$ui.action <- renderUI({
+    output$physchem_database_options_ui <- renderUI({
       if (is.null(data())) return()
-      tipify(actionButton("search_physchem", 
-                          "Physchem Search",
-                          icon = icon('atom'),
-                          style = 'color: #fff; 
+      output = tagList()
+      output [[1]] <- p('Select which Databases you would like to query in addition to ChEMBL')
+      output [[2]] <- tipify(checkboxInput("include_pubchem","PubChem", value = T),'Searches PubChem Database',
+                             placement="bottom", trigger = "hover")
+      output[[3]] <- tipify(checkboxInput("include_Norman","EPI Suite (Norman DB)", value = T),'Searches the EPI Suite database within the Norman Database',
+                            placement="bottom", trigger = "hover")
+      output [[4]] <- tipify(actionButton("search_physchem", 
+                                          "Physchem Search",
+                                          icon = icon('atom'),
+                                          style = 'color: #fff; 
                    background-color: #a44f2e; border-color: #8a2b07'),
-             'Searches ChEMBL and SusDat for physiochemical data',
-             placement="bottom", trigger = "hover")
+                             'Searches ChEMBL and SusDat for physiochemical data',
+                             placement="bottom", trigger = "hover")
+      
+      return(output)
     })
     
-    chembl_data <- eventReactive(input$search_physchem, {
-        #query the chembl database
-        CHEMBLSearch(data())
-    })
-    
-    not_found_in_chembl <- eventReactive(input$search_physchem,{
-        #extract the compounds not found in chembl
-        NotInChEMBL(data(), chembl_data())
-    })
-    
-    
-    sus_data <- eventReactive(input$search_physchem,{
-        #query the epi suite database
-      SusdatSearch(data(), not_found_in_chembl(), chembl_data())
-    })
+    sus_data <- eventReactive(input$search_physchem, {
+          #query the chembl database
+      SimRFlow_DataCollection(data(), PubChem = input$include_pubchem, Norman = input$include_Norman)
+      })
     
     
     output$TBL2 <- renderDataTable(sus_data(),
@@ -1279,7 +1120,7 @@ server <- function(input, output, session) {
 
     nf_compounds <- eventReactive(c(input$search_physchem, input$include_compounds),{
         #extract the compounds not found in susdat
-      MissingInformation(data(), not_found_in_chembl(), sus_data(), missing_info = input$include_compounds)
+      MissingInformation(data(),sus_data(), missing_info = input$include_compounds)
     })
     
     output$ACDLabs_box<-reactive(!is.null(nf_compounds()))
@@ -1458,9 +1299,22 @@ server <- function(input, output, session) {
 
     })
     
-    observe({
-      lol <<- organised_data()
-    })
+    output$simcyp_input_tbl <- renderDataTable(organised_data(),
+                                              rownames = FALSE,
+                                              extensions = list('Buttons'= NULL,
+                                                                'Scroller' = NULL),
+                                              options = list(
+                                                scroller = TRUE,
+                                                scrollX = TRUE,
+                                                scrollY = '300px',
+                                                searching = TRUE,
+                                                fixedColumns = TRUE,
+                                                autoWidth = TRUE,
+                                                #ordering = TRUE,
+                                                scrollCollapse= TRUE,
+                                                dom = 'tB',
+                                                buttons = c('csv', 'excel')
+                                              ))
     
     predicted_variables <- eventReactive(input$predict_params_button,{
       #Get predicted for fu, BP, Vss and Kd
@@ -1494,7 +1348,7 @@ server <- function(input, output, session) {
     
     output_profiles <- eventReactive(input$simulate_button, {
       #Run the simulations through Simcyp
-      SimcypSimulation(organised_data(), subjects = input$subjects, #,trials = input$trials
+      SimcypSimulation(organised_data(), subjects = input$subjects, fu_GFR = input$use_fu_GFR,#,trials = input$trials
                        Time = as.numeric(input$sim_time), #seed = input$set_seed,
                        
                        #set subject parameters
@@ -1524,7 +1378,7 @@ server <- function(input, output, session) {
     
     simcyp_outputs <- eventReactive(input$simulate_button, {
       #All data in simcyp
-      AdditionalOutputs(organised_data())
+      AdditionalOutputs(organised_data(), directory = NULL)
     })
 
     summary_outputs <- eventReactive(input$simulate_button, {
@@ -1558,15 +1412,18 @@ server <- function(input, output, session) {
       
     })
     
+    
     #generate the tissue types after hitting the simulate button
     tissue_types <- eventReactive(input$simulate_button, {
       
       #identify the compound codes
-      tissues<- extract_tissue(output_profiles())
+      tissues<- c('ALL',extract_tissue(output_profiles()))
       
       #convert tissues to a list
       tissue_list<-as.list(tissues)
       names(tissue_list)<- tissues
+      # compound_codes_list[[length(compound_codes_list)]] <- 'ALL'
+      # names(compound_codes_list[[length(compound_codes_list)]]) <- 'All tissues'
       
       return(tissue_list)
       
@@ -1639,7 +1496,7 @@ server <- function(input, output, session) {
     output$conc_time_plot <- renderPlot({
       plot_profile(input$comp_code, output_profiles(), tissue_type = input$tissue,
            units=input$unit, curated_data = experimental_data(), 
-           logy = input$log_scale)
+           logy = input$log_scale, CI = input$confidence_intervals)
     })
     
     #allow user to download outputs
@@ -1767,138 +1624,7 @@ server <- function(input, output, session) {
       }
     )
     
-    ############################################################
-    #                    SIVA Outputs                          #
-    ############################################################
-    
-    SIVA_inputs <- reactive({
-      SIVA_input_file <- input$SIVA_file
-      req(SIVA_input_file)
-      SIVA_input_file$datapath
-    })
-    
-    SIVA_collected_data <- eventReactive(input$search_SIVA_data, {
-      #incorporate findings from experimental data
-      SIVA_inputs <- input$SIVA_file
-      req(SIVA_inputs)
-      SIVA_data_collection(filename = SIVA_inputs$datapath)
-    })
-    
-    #inform user of any missing data in the description blocks
-    output$missing_comp_num <- renderText({ Missing_compound_check(SIVA_inputs(),SIVA_collected_data()) })
-    output$missing_hlc_num <- renderText({ Missing_HLC_check(SIVA_collected_data()) })
-    output$duplicated_comp_num <- renderText({ duplicated_compounds_check(SIVA_collected_data()) })
-    
-    SIVA_updated_data <- eventReactive(input$update_SIVA_data,{
-      SIVA_input_file <- input$SIVA_file_reupload
-      req(SIVA_input_file)
-      SIVA_updated_file_path <- SIVA_input_file$datapath
-      
-      if (file.exists(SIVA_updated_file_path)) {
-        
-        #extract file extensions
-        extension <- file_ext(SIVA_updated_file_path)
-        
-      } else {
-        
-        return(cat("The file does not exist"))
-        
-      }
-      
-      #load the data based on the extracted extension
-      if (extension == 'xlsx'){
-        
-        import<-loadWorkbook(SIVA_updated_file_path, create=FALSE)
-        ICD <- readWorksheet(import,  header = TRUE, sheet = 1)
-        
-      } else if (extension == 'csv'){
-        
-        ICD <- read.csv(SIVA_updated_file_path, header = T, sep = ',')
-        
-      } else {
-        
-        return(cat("File type not compatible."))
-        
-      }
-      ICD
-    })
-    
-    SIVA_curated_data_final<-eventReactive(c(input$search_SIVA_data,input$update_SIVA_data),{
-      
-      SIVA_reupload <- input$SIVA_file_reupload
-      #print(file3)
-      
-      if(!is.null(SIVA_reupload)){
-        
-        return(SIVA_updated_data())
-        
-        
-      } else{
-        
-        return(SIVA_collected_data())
-        
-      }
-    })
-    
-    #Display the collected information
-    output$SIVA_curated_data_tbl <- renderDataTable(SIVA_curated_data_final(),
-                                                    rownames = FALSE,
-                                                    extensions = 'Buttons',
-                                                    options = list(
-                                                      paging = FALSE,
-                                                      searching = TRUE,
-                                                      ordering = TRUE,
-                                                      #scrollCollapse= TRUE,
-                                                      dom = 'l<"sep">Bfrtip',
-                                                      buttons = c('csv', 'excel')
-                                                    ))
-    
-    observe({
-      obs_data <<- SIVA_curated_data_final()
-    })
-    
-    
-    #Calculate the SIVA predictions
-    SIVA_predictions <- eventReactive(input$predict_iv_distribution, {
-
-      InVitroDistribution(ICD = SIVA_curated_data_final(), 
-                          Cinitial = input$nominal_conc, ncell = input$number_cells, 
-                          Vwell = input$vol_well, pH_medium = input$medium_pH,
-                          f_serum =input$serum_fraction, Sysdiameter = input$well_diameter,
-                          save.csv = F)
-    })
-    
-    #Display the predicted outputs
-    output$SIVA_output_tbl <- renderDataTable(SIVA_predictions(),
-                                                    rownames = FALSE,
-                                                    extensions = 'Buttons',
-                                              options = list(
-                                                paging = FALSE,
-                                                searching = TRUE,
-                                                ordering = TRUE,
-                                                #scrollCollapse= TRUE,
-                                                dom = 'l<"sep">Bfrtip',
-                                                buttons = c('csv', 'excel')
-                                              ))
-    
-    #plot the SIVA output plots
-    output$SIVA_output_plots <- renderPlot({
-      SIVA_plots(SIVA_collected_data(), SIVA_predictions())
-    })
-    
-    #allow user to download SIVA outputs
-    output$Cat10<- downloadHandler(
-      #Specify The File Name 
-      filename = 'In Vitro Distribution Plots.png',
-      content = function(file){
-        # open the format of file which needs to be downloaded ex: pdf, png etc. 
-        png(file, res = 300, height = 4, width = 15, units = "in")
-        
-        print(SIVA_plots(SIVA_collected_data(), SIVA_predictions()))
-        
-        dev.off()
-      }
-    )
+   
     
     ############################################################
     #                       Help Page                          #
