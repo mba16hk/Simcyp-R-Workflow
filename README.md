@@ -21,53 +21,48 @@ source('Additional_data.R')
 source('plotting_functions.R')
 ```
 ```bash
+### Import and process the data before data collection
+
 #set the file directory of the compound file
 file_dir <- 'data_files/compound_file.xlsx'
-```
 
-```bash
 #preprocess the compound file, extract only columns of interest
 data <- ProcessInputs(file_dir)
 ```
 
 ```bash
+### Collect physicochemical data and build an understanding of missing parameters
+
 #query the chembl, Pubchem and EPI Suite (Norman) database
 Physicochemical_data <- SimRFlow_DataCollection(data_table, PubChem = T, Norman = T)
-```
 
-```bash
 #determine the compounds not found in your database, or which have missing data
 Not_found <- MissingInformation(data,Physicochemical_data, missing_info = T)
 
 #determine which compounds can have parameters which are out of the applicablility domain of Simcyp
 out_of_range <- OutOfRange_Parameter(Physicochemical_data)
+
+### OPTIONAL STEP: This step is for users who wish to upload additional data
+### This may be the case if the user wants to upload their own physicochemical or PK data 
+additional_data_directory<- 'data_files/acd_output.xls'
+Physicochemical_data<-AdditionalData(data,additional_data_directory,Physicochemical_data, override_existing_data = F)
 ```
 
 ```bash
 ### This step can be skipped if users do not wish to query httk as part of their workflow
 #extract CAS numbers and DTXSID values to query the httk database
 CAS_DTXSID <- CAS_and_DTXSID(data)
-```
 
-```bash
-### This step is for users who wish to upload additional data
-ACD_data_directory<- 'data_files/acd_output.xls'
-acd_data<-ACD_inputs(data,nf_in_chembl,sus_data,missing_info=T)
-physchem_data <- ACD_outputs(data,ACD_data_directory,sus_data)
-```
-
-```bash
 #search httk library for experimental data using CAS and DTXSIDs
 httk_data <- httkSearch(Physicochemical_data, CAS_DTXSID, data,
                         fu_operation = 'arithmetic mean',CLint_operation = 'median')
 ```
 
 ```bash
+### OPTIONAL STEP
 ### For users who have additional experimental data
 experimental_data_directory<-'data_files/experimental_data.xlsx'
-```
 
-```bash
 #incorporate experimental data with data from httk
 httk_exp_data <- ExpDataSearch(httk_data, experimental_data_directory, CL_threshold = 3.8)
 ```
@@ -75,13 +70,14 @@ httk_exp_data <- ExpDataSearch(httk_data, experimental_data_directory, CL_thresh
 ```bash
 #organise the data in preparation for running it through Simcyp
 organised_data <- OrganiseInputData(httk_data,info = info, admin_route = 'IV Bolus')
-
-```bash
-#use the prediction module of SimRFlow to predict fu, BP, Vss and Kd
-predictions<- PredictParameters(organised_data)
 ```
 
 ```bash
+## Using Simcyp
+
+#use the prediction module of SimRFlow to predict fu, BP, Vss and Kd
+predictions<- PredictParameters(organised_data)
+
 #run the simulations for each compound in bulk
 output_profiles<-SimcypSimulation(organised_data, trials = 1, subjects = 5, Time = 24)
 ```
