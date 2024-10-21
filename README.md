@@ -33,8 +33,9 @@ data <- ProcessInputs(file_dir)
 ```bash
 ### Collect physicochemical data and build an understanding of missing parameters
 
-#query the chembl, Pubchem and EPI Suite (Norman) database
-Physicochemical_data <- SimRFlow_DataCollection(data_table, PubChem = T, Norman = T)
+#query the chembl, Pubchem and EPI Suite (Norman) database. If you do not wish to query
+# pubchem or Norman, please set them to F instead of T
+Physicochemical_data <- SimRFlow_DataCollection(data, PubChem = T, Norman = T)
 
 #determine the compounds not found in your database, or which have missing data
 Not_found <- MissingInformation(data,Physicochemical_data, missing_info = T)
