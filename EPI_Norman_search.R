@@ -3,7 +3,7 @@
 NormanSearch <- function (info, logP_selection_flag =1 ){
   
   #set the working directory to the norman suspect list database (which uses EPI Suite values)
-  sus_dir<-paste0(dirname(dirname(rstudioapi::getSourceEditorContext()$path)),
+  sus_dir<-paste0(dirname(rstudioapi::getSourceEditorContext()$path),
                   '/data_files/Norman_susdat.csv')
   
   #read the suspect database
