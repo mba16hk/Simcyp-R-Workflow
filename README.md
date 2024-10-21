@@ -70,7 +70,7 @@ httk_exp_data <- ExpDataSearch(httk_data, experimental_data_directory, CL_thresh
 
 ```bash
 #organise the data in preparation for running it through Simcyp
-organised_data <- OrganiseInputData(httk_data,info = info, admin_route = 'IV Bolus')
+organised_data <- OrganiseInputData(httk_data,info = data, admin_route = 'IV Bolus')
 ```
 
 ```bash
