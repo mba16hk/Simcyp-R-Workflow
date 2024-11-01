@@ -79,35 +79,40 @@ ChEMBL_API_Search <- function(data_table) {
   output_dataframe <- output_dataframe %>% replace(.=="NULL", NA) # replace with NA
   
   #check for structural alerts
-  chembl_ids <- paste0(output_dataframe$CHEMBL_id,collapse = ',')
-  url <- paste("https://www.ebi.ac.uk/chembl/api/data/compound_structural_alert.json?molecule_chembl_id__in=",chembl_ids,sep='')
-  response <- GET(url)
+  chembl_ids <-output_dataframe$CHEMBL_id
   
-  # Check if the request was successful (status code 200)
-  if (response$status_code == 200) {
-    # Parse the JSON response
-    output <- content(response,'text', encoding = "UTF-8")
-    output <- fromJSON(output)
-    quat_N <- str_detect(output$compound_structural_alerts$alert$alert_name,'quaternary nitrogen')
-    output_dataframe$quaternary_nitrogens <- NA
-    if (T %in% quat_N){
-      with_quat_N <- output$compound_structural_alerts$molecule_chembl_id[quat_N]
-      output_dataframe$quaternary_nitrogens <- ifelse(output_dataframe$CHEMBL_id %in% with_quat_N,TRUE,FALSE)
-    } else {
-      output_dataframe$quaternary_nitrogens <- FALSE
-    }
+  #split data into chunks of 20
+  chunk_size <- 20
+  
+  # Calculate the number of chunks
+  num_chunks <- ceiling(length(chembl_ids) / chunk_size)
+  
+  for (i in 1:num_chunks) {
+    start_idx <- (i - 1) * chunk_size + 1
+    end_idx <- min(i * chunk_size, length(chembl_ids))
     
-  } 
+    chunk <- chembl_ids[start_idx:end_idx]
+    url <- paste("https://www.ebi.ac.uk/chembl/api/data/compound_structural_alert.json?molecule_chembl_id__in=",paste0(chunk,collapse=','),sep='')
+    response <- GET(url)
+  
+    # Check if the request was successful (status code 200)
+    if (response$status_code == 200) {
+      # Parse the JSON response
+      output <- content(response,'text', encoding = "UTF-8")
+      output <- fromJSON(output)
+      quat_N <- str_detect(output$compound_structural_alerts$alert$alert_name,'quaternary nitrogen')
+      output_dataframe$quaternary_nitrogens <- NA
+      if (T %in% quat_N){
+        with_quat_N <- output$compound_structural_alerts$molecule_chembl_id[quat_N]
+        output_dataframe$quaternary_nitrogens <- ifelse(output_dataframe$CHEMBL_id %in% with_quat_N,TRUE,FALSE)
+      } else {
+        output_dataframe$quaternary_nitrogens <- FALSE
+      }
+      
+    } 
+  }
   
   colnames(output_dataframe) <- c("CHEMBL_id","SMILES",'INCHIKEY','ALogP','CXLogD','CXLogP','Acid_pka','Base_pka','MolFormula','MW','HBA','HBD','Compound_type','PSA','quat_nitrogens')
   return(output_dataframe)
 
 }
-
-# file_dir <- 'EXp_Barira_output.csv'
-# Desinathon_data <- read.csv(file_dir,header = T,fileEncoding="UTF-8")
-# inchis <- Desinathon_data$InChIKey
-# output2 <- search_compound_by_inchikey(inchis)
-
-
-
