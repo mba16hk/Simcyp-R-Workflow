@@ -222,6 +222,11 @@ match.df <- function(df1, df2, colnames_to_match){
 OutOfRange_Parameter <- function (collected_data){
   
   columns_of_interest <- keep_df_cols(collected_data,c('Code','CODE','MW','PSA','HBD','CXLogP'))
+
+  columns_of_interest$PSA <- as.numeric(columns_of_interest$PSA)
+  columns_of_interest$HBD <- as.numeric(columns_of_interest$HBD)
+  columns_of_interest$MW <- as.numeric(columns_of_interest$MW)
+  columns_of_interest$CXLogP <- as.numeric(columns_of_interest$CXLogP)
   
   # The mandatory out of ranges for PSA and HBD for Peff
   OutOfRange_PSA_idx <- which(columns_of_interest$PSA>154.4 | columns_of_interest$PSA<16.2)
