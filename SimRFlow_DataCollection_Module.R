@@ -58,6 +58,18 @@ SimRFlow_DataCollection <- function (data_table, PubChem = T, Norman = T){
       pubchem_data <- rbind(pubchem_data,duplicates)
       pubchem_data$Source <- 'PubChem API'
       
+    } else{
+      pubchem_data <- data.frame(
+        CanonicalSMILES = numeric(),
+        InChIKey = numeric(),
+        MolecularFormula = numeric(),
+        MolecularWeight = numeric(),
+        XLogP = numeric(),
+        TPSA = numeric(),
+        HBondDonorCount = numeric(),
+        HBondAcceptorCount = numeric(),
+        Source = numeric()
+      )
     }
     
     message('Merging PubChem and ChEMBL Data')
@@ -90,15 +102,17 @@ SimRFlow_DataCollection <- function (data_table, PubChem = T, Norman = T){
       missing_logP_inchi <- SimRFlow_Data$INCHIKEY[missing_logP_idx]
       missing_logP_table <- data_table[which(data_table$INCHIKEY %in% missing_logP_inchi),]
       EPI_data <- keep_df_cols(NormanSearch(missing_logP_table),c("INCHIKEY","LogP"))
-      EPI_data$Source <- 'EPI Suite'
+      if (nrow(EPI_data)>0){
+        EPI_data$Source <- 'EPI Suite'
+        ### merge the missing logP with the ChemBL_PubChem dataframe
+        SimRFlow_Data <- merge(SimRFlow_Data,EPI_data,by.x=c('INCHIKEY','CXLogP', 'Source'), by.y = c("INCHIKEY","LogP",'Source'), all = T)
+        
+        #Organise dataframe columns
+        SimRFlow_Data <- SimRFlow_Data %>% relocate(c('CXLogP'),.after = MW)
+        SimRFlow_Data <- SimRFlow_Data %>% relocate(c('Source'),.after = ALogP)
+        SimRFlow_Data <- merge(data_table,SimRFlow_Data,by='INCHIKEY', all = T)
+      }
       
-      ### merge the missing logP with the ChemBL_PubChem dataframe
-      SimRFlow_Data <- merge(SimRFlow_Data,EPI_data,by.x=c('INCHIKEY','CXLogP', 'Source'), by.y = c("INCHIKEY","LogP",'Source'), all = T)
-      
-      #Organise dataframe columns
-      SimRFlow_Data <- SimRFlow_Data %>% relocate(c('CXLogP'),.after = MW)
-      SimRFlow_Data <- SimRFlow_Data %>% relocate(c('Source'),.after = ALogP)
-      SimRFlow_Data <- merge(data_table,SimRFlow_Data,by='INCHIKEY', all = T)
     }
    
   } else{
