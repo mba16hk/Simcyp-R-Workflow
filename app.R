@@ -11,7 +11,6 @@ setwd(dirname(rstudioapi::getSourceEditorContext()$path))
 #import the scripts 
 source('input_query.R')
 source('SimRFlow_DataCollection_Module.R')
-source('ACD_Labs.R')
 source('httk_search.R')
 source('experimental_data_search.R')
 source('organise_simulation_data.R')
@@ -1641,3 +1640,4 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui = ui, server = server)
+
