@@ -6,6 +6,8 @@ A high throughput workflow comprising data collection and simulation of compound
 ```bash
 #set the working directory to the working directory of the scripts
 setwd(dirname(rstudioapi::getSourceEditorContext()$path))
+#Ensure webchem library is installed and loaded
+library(webchem)
 ```
 
 ```bash
