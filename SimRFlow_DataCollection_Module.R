@@ -10,6 +10,7 @@ source('input_query.R')
 source('ChEMBL_API.R')
 source('PubChem_API.R')
 source('EPI_Norman_Search.R')
+library(webchem)
 
 SimRFlow_DataCollection <- function (data_table, PubChem = T, Norman = T){
   
@@ -139,6 +140,7 @@ SimRFlow_DataCollection <- function (data_table, PubChem = T, Norman = T){
   return(SimRFlow_Data)
   
 }
+
 
 
 
