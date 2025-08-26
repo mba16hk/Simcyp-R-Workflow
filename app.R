@@ -5,6 +5,7 @@ library(DT)
 library(shinyBS)
 library(shinyWidgets)
 library(shinycssloaders)
+library(webchem)
 
 
 setwd(dirname(rstudioapi::getSourceEditorContext()$path))
@@ -1640,4 +1641,5 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui = ui, server = server)
+
 
