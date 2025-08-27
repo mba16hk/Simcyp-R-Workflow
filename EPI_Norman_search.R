@@ -125,7 +125,7 @@ NotFoundInsusdat <- function (NOT_FOUND, ChEMBL_sus_search){
 CAS_and_DTXSID<- function(info){
   
   #set the working directory to the norman suspect list database (which uses EPI Suite values)
-  sus_dir<-paste0(dirname(dirname(rstudioapi::getSourceEditorContext()$path)),
+  sus_dir<-paste0(dirname(rstudioapi::getSourceEditorContext()$path),
                   '/data_files/Norman_susdat.csv')
   
   #read the suspect database
@@ -189,5 +189,6 @@ CAS_and_DTXSID<- function(info){
   
   return(CAS_DTXSID)
 }
+
 
 
